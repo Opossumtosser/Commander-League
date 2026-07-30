@@ -111,6 +111,17 @@
     .news-item { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
     .news-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
     .news-date { font-size: 0.8rem; color: var(--text-muted); }
+    .board-post {
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .board-post:last-child { border-bottom: none; }
+    .board-post-meta {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem;
+    }
+    .board-author { font-weight: 600; color: var(--accent); }
+    .board-post-body { white-space: pre-wrap; word-break: break-word; }
     .doc-list { list-style: none; }
     .doc-list li {
       display: flex; align-items: center; justify-content: space-between;
@@ -224,6 +235,7 @@
         <button data-section="home" class="active" onclick="showSection('home')">Home</button>
         <button data-section="standings" onclick="showSection('standings')">Standings</button>
         <button data-section="news" onclick="showSection('news')">News</button>
+        <button data-section="board" onclick="showSection('board')">Message Board</button>
         <button data-section="docs" onclick="showSection('docs')">Documents</button>
         <button data-section="vote" onclick="showSection('vote')">Vote</button>
         <button data-section="qr" onclick="showSection('qr')">QR Code</button>
@@ -268,6 +280,29 @@
     <section id="news" class="section">
       <h1>Upcoming & League News</h1>
       <div class="card" id="newsList"></div>
+    </section>
+
+    <!-- MESSAGE BOARD -->
+    <section id="board" class="section">
+      <h1>Message Board</h1>
+      <p class="muted">Ask questions, coordinate pods, or leave notes for the league. Posts sync for everyone when cloud is on.</p>
+      <div class="card">
+        <h2>Post a message</h2>
+        <div class="form-group">
+          <label>Your name</label>
+          <input type="text" id="boardAuthor" placeholder="Name" maxlength="40">
+        </div>
+        <div class="form-group">
+          <label>Message</label>
+          <textarea id="boardBody" placeholder="Ask a question or leave a note…" maxlength="1000"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="postBoardMessage()">Post</button>
+        <p class="muted mt-1" id="boardMsg"></p>
+      </div>
+      <div class="card">
+        <h2>Recent posts</h2>
+        <div id="boardList"></div>
+      </div>
     </section>
 
     <!-- DOCUMENTS -->
@@ -503,6 +538,9 @@
         { id: 1, title: "League Rules (v2)", url: "#", note: "Official house rules and scoring" },
         { id: 2, title: "Season Schedule", url: "#", note: "Weekly meetup times and bye weeks" }
       ],
+      messages: [
+        { id: 1, author: "League Admin", body: "Welcome to the message board! Ask rules questions or coordinate games here.", date: "2026-07-30T12:00:00.000Z" }
+      ],
       vote: {
         description: "What should the theme be for next season?",
         options: [
@@ -723,6 +761,7 @@
       if (!d.pointsMode) d.pointsMode = 'weekly';
       if (!d.vote) d.vote = structuredClone(DEFAULT_DATA.vote);
       if (!Array.isArray(d.vote.voters)) d.vote.voters = [];
+      if (!Array.isArray(d.messages)) d.messages = [];
       (d.players || []).forEach(ensureWeekly);
     }
 
@@ -874,8 +913,84 @@
       renderHome();
       renderStandings();
       renderNews();
+      renderBoard();
       renderDocs();
       renderVote();
+    }
+
+    function formatBoardDate(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } catch {
+        return iso;
+      }
+    }
+
+    function renderBoard() {
+      const authorInput = document.getElementById('boardAuthor');
+      if (authorInput && !authorInput.value) {
+        try {
+          const saved = localStorage.getItem('mtgLeagueBoardName');
+          if (saved) authorInput.value = saved;
+        } catch (_) {}
+      }
+      const list = document.getElementById('boardList');
+      if (!list) return;
+      const msgs = [...(data.messages || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      if (!msgs.length) {
+        list.innerHTML = '<p class="empty">No messages yet. Be the first to post!</p>';
+        return;
+      }
+      list.innerHTML = msgs.map(m => `
+        <div class="board-post">
+          <div class="board-post-meta">
+            <span class="board-author">${esc(m.author)}</span>
+            <span class="news-date">${formatBoardDate(m.date)}</span>
+          </div>
+          <div class="board-post-body">${esc(m.body)}</div>
+          ${adminUnlocked ? `<button class="btn btn-sm btn-danger mt-1" onclick="deleteBoardMessage(${m.id})">Delete</button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function postBoardMessage() {
+      const author = (document.getElementById('boardAuthor').value || '').trim();
+      const body = (document.getElementById('boardBody').value || '').trim();
+      const msgEl = document.getElementById('boardMsg');
+      if (!author) {
+        msgEl.textContent = 'Please enter your name.';
+        return;
+      }
+      if (!body) {
+        msgEl.textContent = 'Please write a message.';
+        return;
+      }
+      if (!data.messages) data.messages = [];
+      data.messages.push({
+        id: Date.now(),
+        author: author.slice(0, 40),
+        body: body.slice(0, 1000),
+        date: new Date().toISOString()
+      });
+      // Keep last 100 messages
+      if (data.messages.length > 100) {
+        data.messages = data.messages.slice(-100);
+      }
+      document.getElementById('boardBody').value = '';
+      msgEl.textContent = 'Posted!';
+      try { localStorage.setItem('mtgLeagueBoardName', author); } catch (_) {}
+      saveData();
+      renderBoard();
+    }
+
+    function deleteBoardMessage(id) {
+      if (!adminUnlocked) return;
+      if (!confirm('Delete this message?')) return;
+      data.messages = (data.messages || []).filter(m => m.id !== id);
+      saveData();
+      renderBoard();
+      if (adminUnlocked) renderAdmin();
     }
 
     function sortedPlayers() {
