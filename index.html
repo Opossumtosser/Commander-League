@@ -464,17 +464,16 @@
 
   <script>
     // ========== CLOUD CONFIG ==========
-    // Paste your Firebase web app config here (then upload this file to GitHub)
-    // so every visitor shares the same live data. Leave null to use local-only mode.
+    // Firebase config embedded so every visitor shares the same live data.
     const EMBEDDED_FIREBASE_CONFIG = {
-  "apiKey": "AIzaSyCLPrLiN3VhTjs3YhNA4yrZGnOMSORykPY",
-  "authDomain": "commander-league-9b85a.firebaseapp.com",
-  "projectId": "commander-league-9b85a",
-  "storageBucket": "commander-league-9b85a.firebasestorage.app",
-  "messagingSenderId": "761631993831",
-  "appId": "1:761631993831:web:78037a37b41408ac5f5742",
-  "measurementId": "G-J36Q0N1QR2"
-};
+      apiKey: "AIzaSyCLPrLiN3VhTjs3YhNA4yrZGnOMSORykPY",
+      authDomain: "commander-league-9b85a.firebaseapp.com",
+      projectId: "commander-league-9b85a",
+      storageBucket: "commander-league-9b85a.firebasestorage.app",
+      messagingSenderId: "761631993831",
+      appId: "1:761631993831:web:78037a37b41408ac5f5742",
+      measurementId: "G-J36Q0N1QR2"
+    };
 
     // ========== DEFAULT DATA ==========
     const NUM_WEEKS = 6;
@@ -647,16 +646,34 @@
       }
     }
 
+    function parseFirebaseConfig(raw) {
+      let text = (raw || '').trim();
+      if (!text) throw new Error('Paste your Firebase config first.');
+      // Strip const firebaseConfig = ... and trailing semicolon
+      text = text.replace(/^\s*(?:const|let|var)\s+\w+\s*=\s*/i, '');
+      text = text.replace(/;\s*$/, '');
+      // Strip // comments
+      text = text.replace(/\/\/.*$/gm, '');
+      // Quote unquoted keys (handles newlines/indent): apiKey: → "apiKey":
+      text = text.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+      // Single-quoted strings → double-quoted
+      text = text.replace(/'([^']*)'/g, (_, s) => '"' + s.replace(/"/g, '\\"') + '"');
+      // Trailing commas before } or ]
+      text = text.replace(/,(\s*[}\]])/g, '$1');
+      const cfg = JSON.parse(text);
+      if (!cfg.apiKey || !cfg.projectId) {
+        throw new Error('Config must include apiKey and projectId');
+      }
+      return cfg;
+    }
+
     function saveFirebaseConfig() {
       const raw = document.getElementById('firebaseConfigInput').value.trim();
-      if (!raw) return alert('Paste your Firebase config JSON first.');
       try {
-        const cfg = JSON.parse(raw);
-        if (!cfg.apiKey || !cfg.projectId) throw new Error('Config must include apiKey and projectId');
+        const cfg = parseFirebaseConfig(raw);
         localStorage.setItem('mtgLeagueFirebase', JSON.stringify(cfg));
         if (cloudUnsub) { cloudUnsub(); cloudUnsub = null; }
         if (firebase.apps.length) {
-          // Can't re-init easily; reload is simplest
           alert('Config saved. The page will reload to connect.');
           location.reload();
           return;
@@ -664,7 +681,7 @@
         initFirebase();
         alert('Connected. Now click “Push local data to cloud”, then download the embedded file and upload it to GitHub.');
       } catch (e) {
-        alert('Invalid config: ' + e.message);
+        alert('Invalid config: ' + e.message + '\n\nTip: paste either { ... } only, or the full const firebaseConfig = { ... } from Firebase.');
       }
     }
 
