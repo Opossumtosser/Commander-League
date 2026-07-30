@@ -7,6 +7,8 @@
   <meta name="description" content="MTG Commander League standings, news, documents, and theme voting">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     :root {
       --bg: #0f0f14;
@@ -422,6 +424,23 @@
         </div>
 
         <div class="card">
+          <h2>Cloud Sync (everyone sees the same data)</h2>
+          <p class="muted">Connect a free Firebase project so points, news, and votes update for all visitors automatically.</p>
+          <p class="muted" id="cloudStatus">Status: Not connected</p>
+          <div class="form-group">
+            <label>Paste your Firebase config object (from Project settings → Your apps)</label>
+            <textarea id="firebaseConfigInput" rows="8" placeholder='{\n  "apiKey": "...",\n  "authDomain": "...",\n  "projectId": "...",\n  "storageBucket": "...",\n  "messagingSenderId": "...",\n  "appId": "..."\n}'></textarea>
+          </div>
+          <div class="flex">
+            <button class="btn btn-primary" onclick="saveFirebaseConfig()">Save &amp; Connect</button>
+            <button class="btn" onclick="pushToCloud()">Push local data to cloud</button>
+            <button class="btn" onclick="pullFromCloud()">Pull cloud data now</button>
+          </div>
+          <p class="muted mt-1">After connecting: click <strong>Push local data to cloud</strong> once, then re-upload this page to GitHub with the config embedded (use the button below) so every visitor connects automatically.</p>
+          <button class="btn mt-1" onclick="downloadWithConfig()">Download index.html with cloud config embedded</button>
+        </div>
+
+        <div class="card">
           <h2>Data Backup</h2>
           <p class="muted">Export your data as JSON to share or backup. Import to restore on another device/browser.</p>
           <div class="flex mt-1">
@@ -440,12 +459,18 @@
   </main>
 
   <footer>
-    Commander League Hub · Data stored locally in your browser · Share via Export/Import or host this file
+    Commander League Hub · <span id="footerSync">Local mode</span>
   </footer>
 
   <script>
+    // ========== CLOUD CONFIG ==========
+    // Paste your Firebase web app config here (then upload this file to GitHub)
+    // so every visitor shares the same live data. Leave null to use local-only mode.
+    const EMBEDDED_FIREBASE_CONFIG = null;
+
     // ========== DEFAULT DATA ==========
     const NUM_WEEKS = 6;
+    const CLOUD_DOC = 'league/main';
 
     const DEFAULT_DATA = {
       leagueTitle: "Commander League",
@@ -487,6 +512,194 @@
     let data = null;
     let adminUnlocked = false;
     let selectedVoteId = null;
+    let db = null;
+    let cloudUnsub = null;
+    let cloudReady = false;
+    let applyingCloud = false;
+
+    function getFirebaseConfig() {
+      if (EMBEDDED_FIREBASE_CONFIG && EMBEDDED_FIREBASE_CONFIG.apiKey) {
+        return EMBEDDED_FIREBASE_CONFIG;
+      }
+      try {
+        const raw = localStorage.getItem('mtgLeagueFirebase');
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return null;
+    }
+
+    function initFirebase() {
+      const cfg = getFirebaseConfig();
+      updateCloudStatus();
+      if (!cfg || !cfg.apiKey || !cfg.projectId) {
+        cloudReady = false;
+        return false;
+      }
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(cfg);
+        }
+        db = firebase.firestore();
+        cloudReady = true;
+        listenToCloud();
+        updateCloudStatus();
+        return true;
+      } catch (e) {
+        console.error('Firebase init failed', e);
+        cloudReady = false;
+        updateCloudStatus('Error: ' + e.message);
+        return false;
+      }
+    }
+
+    function updateCloudStatus(extra) {
+      const el = document.getElementById('cloudStatus');
+      const foot = document.getElementById('footerSync');
+      const cfg = getFirebaseConfig();
+      let msg;
+      if (extra) msg = extra;
+      else if (cloudReady) msg = 'Status: Connected — live sync on';
+      else if (cfg && cfg.apiKey) msg = 'Status: Config saved, connecting…';
+      else msg = 'Status: Not connected (local only)';
+      if (el) el.textContent = msg;
+      if (foot) foot.textContent = cloudReady ? 'Cloud sync on — everyone sees the same data' : 'Local mode — use Export/Import or enable Cloud Sync in Admin';
+    }
+
+    function listenToCloud() {
+      if (!db) return;
+      if (cloudUnsub) cloudUnsub();
+      cloudUnsub = db.doc(CLOUD_DOC).onSnapshot(
+        (snap) => {
+          if (!snap.exists) return;
+          const remote = snap.data();
+          if (!remote || !remote.payload) return;
+          // Avoid feedback loop when we just wrote
+          if (applyingCloud) return;
+          try {
+            applyingCloud = true;
+            const incoming = typeof remote.payload === 'string' ? JSON.parse(remote.payload) : remote.payload;
+            if (!incoming.players) return;
+            data = incoming;
+            migrateData(data);
+            applyAutoWeek();
+            checkSeasonEndReset();
+            localStorage.setItem('mtgLeague', JSON.stringify(data));
+            renderAll();
+            if (adminUnlocked) renderAdmin();
+          } catch (e) {
+            console.error('Cloud apply failed', e);
+          } finally {
+            setTimeout(() => { applyingCloud = false; }, 300);
+          }
+        },
+        (err) => {
+          console.error('Cloud listener error', err);
+          updateCloudStatus('Status: Listener error — check Firestore rules');
+        }
+      );
+    }
+
+    async function pushToCloud() {
+      if (!db) {
+        if (!initFirebase()) return alert('Connect Firebase first (paste config and Save & Connect).');
+      }
+      if (!data) return;
+      try {
+        applyingCloud = true;
+        await db.doc(CLOUD_DOC).set({
+          payload: JSON.parse(JSON.stringify(data)),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        alert('Pushed to cloud. Other visitors will see this data.');
+      } catch (e) {
+        alert('Push failed: ' + e.message + '\n\nMake sure Firestore is created and rules allow write.');
+      } finally {
+        setTimeout(() => { applyingCloud = false; }, 500);
+      }
+    }
+
+    async function pullFromCloud() {
+      if (!db) {
+        if (!initFirebase()) return alert('Connect Firebase first.');
+      }
+      try {
+        const snap = await db.doc(CLOUD_DOC).get();
+        if (!snap.exists) return alert('No cloud data yet. Click “Push local data to cloud” first.');
+        const remote = snap.data();
+        const incoming = typeof remote.payload === 'string' ? JSON.parse(remote.payload) : remote.payload;
+        data = incoming;
+        migrateData(data);
+        applyAutoWeek();
+        localStorage.setItem('mtgLeague', JSON.stringify(data));
+        renderAll();
+        if (adminUnlocked) renderAdmin();
+        alert('Pulled latest cloud data.');
+      } catch (e) {
+        alert('Pull failed: ' + e.message);
+      }
+    }
+
+    function saveFirebaseConfig() {
+      const raw = document.getElementById('firebaseConfigInput').value.trim();
+      if (!raw) return alert('Paste your Firebase config JSON first.');
+      try {
+        const cfg = JSON.parse(raw);
+        if (!cfg.apiKey || !cfg.projectId) throw new Error('Config must include apiKey and projectId');
+        localStorage.setItem('mtgLeagueFirebase', JSON.stringify(cfg));
+        if (cloudUnsub) { cloudUnsub(); cloudUnsub = null; }
+        if (firebase.apps.length) {
+          // Can't re-init easily; reload is simplest
+          alert('Config saved. The page will reload to connect.');
+          location.reload();
+          return;
+        }
+        initFirebase();
+        alert('Connected. Now click “Push local data to cloud”, then download the embedded file and upload it to GitHub.');
+      } catch (e) {
+        alert('Invalid config: ' + e.message);
+      }
+    }
+
+    function downloadWithConfig() {
+      const cfg = getFirebaseConfig();
+      if (!cfg) return alert('Save a Firebase config first.');
+      fetch(window.location.href.split('#')[0])
+        .then(r => r.text())
+        .then(html => {
+          const embedded = 'const EMBEDDED_FIREBASE_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';';
+          let out = html.replace(
+            /const EMBEDDED_FIREBASE_CONFIG = null;/,
+            embedded
+          );
+          if (out === html) {
+            // already embedded or different formatting
+            out = html.replace(
+              /const EMBEDDED_FIREBASE_CONFIG = [\s\S]*?;\n/,
+              embedded + '\n'
+            );
+          }
+          const blob = new Blob([out], { type: 'text/html' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'index.html';
+          a.click();
+          alert('Downloaded index.html with cloud config. Upload this file to GitHub (replace the old index.html).');
+        })
+        .catch(() => {
+          alert('Could not read page source (normal for some local file opens). Copy your config into EMBEDDED_FIREBASE_CONFIG in the file manually, then upload to GitHub.');
+        });
+    }
+
+    function migrateData(d) {
+      if (!d.leagueTitle) d.leagueTitle = DEFAULT_DATA.leagueTitle;
+      if (!d.seasonStartDate) d.seasonStartDate = DEFAULT_DATA.seasonStartDate;
+      if (!d.seasonEndDate) d.seasonEndDate = DEFAULT_DATA.seasonEndDate;
+      if (!Array.isArray(d.postponedWeeks)) d.postponedWeeks = [];
+      if (!d.pointsMode) d.pointsMode = 'weekly';
+      if (!d.vote) d.vote = structuredClone(DEFAULT_DATA.vote);
+      if (!Array.isArray(d.vote.voters)) d.vote.voters = [];
+      (d.players || []).forEach(ensureWeekly);
+    }
 
     function playerTotal(p) {
       ensureWeekly(p);
@@ -506,14 +719,7 @@
       try {
         const raw = localStorage.getItem('mtgLeague');
         data = raw ? JSON.parse(raw) : structuredClone(DEFAULT_DATA);
-        if (!data.leagueTitle) data.leagueTitle = DEFAULT_DATA.leagueTitle;
-        if (!data.seasonStartDate) data.seasonStartDate = DEFAULT_DATA.seasonStartDate;
-        if (!data.seasonEndDate) data.seasonEndDate = DEFAULT_DATA.seasonEndDate;
-        if (!Array.isArray(data.postponedWeeks)) data.postponedWeeks = [];
-        if (!data.pointsMode) data.pointsMode = 'weekly';
-        if (!data.vote) data.vote = structuredClone(DEFAULT_DATA.vote);
-        if (!Array.isArray(data.vote.voters)) data.vote.voters = [];
-        data.players.forEach(ensureWeekly);
+        migrateData(data);
       } catch {
         data = structuredClone(DEFAULT_DATA);
       }
@@ -523,6 +729,15 @@
 
     function saveData() {
       localStorage.setItem('mtgLeague', JSON.stringify(data));
+      // Live push to cloud when connected (debounced slightly by applyingCloud flag)
+      if (cloudReady && db && !applyingCloud) {
+        applyingCloud = true;
+        db.doc(CLOUD_DOC).set({
+          payload: JSON.parse(JSON.stringify(data)),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(e => console.error('Cloud save failed', e))
+          .finally(() => setTimeout(() => { applyingCloud = false; }, 400));
+      }
     }
 
     /** Calendar weeks since start, then skip postponed weeks to get league week (capped 1–6). */
@@ -905,6 +1120,12 @@
       const endEl = document.getElementById('adminEndDate');
       if (endEl) endEl.value = data.seasonEndDate || '';
       document.getElementById('voteDescription').value = data.vote.description;
+      const cfg = getFirebaseConfig();
+      const cfgInput = document.getElementById('firebaseConfigInput');
+      if (cfgInput && cfg && !cfgInput.value) {
+        cfgInput.value = JSON.stringify(cfg, null, 2);
+      }
+      updateCloudStatus();
 
       // Postpone checkboxes
       const postWrap = document.getElementById('adminPostponeWeeks');
@@ -1216,7 +1437,7 @@
     // Init
     loadData();
     renderAll();
-    // Auto-generate QR if needed
+    initFirebase();
   </script>
 </body>
 </html>
