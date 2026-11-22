@@ -9,6 +9,7 @@
   <script src="https://cloudflare.com"></script>
   <script src="https://gstatic.com"></script>
   <script src="https://gstatic.com"></script>
+
   <style>
     :root {
       --bg: #0f0f14;
@@ -623,6 +624,7 @@
       appId: "1:761631993831:web:78037a37b41408ac5f5742",
       measurementId: "G-J36Q0N1QR2"
     };
+
     // ========== DEFAULT DATA ==========
     const NUM_WEEKS = 6;
     const CLOUD_DOC = 'league/main';
@@ -1234,14 +1236,123 @@
 
     function clearWeekPodHistory() {
       if (!adminUnlocked) return;
-    function clearGeneratedTables() {
-      if (!adminUnlocked) return;
-      if (!confirm('Clear tonight\'s generated tables?')) return;
-      data.generatedTables = { week: null, shuffleCount: 0, backToBackRepeats: 0, updatedAt: null, pods: [] };
+      if (!confirm(`Clear saved pod history for Week ${data.week}?`)) return;
+      if (data.podHistory) delete data.podHistory[data.week];
+      saveData();
+      renderAdmin();
+    }
+
+    function buildPodHistoryPairCounts(currentWeek) {
+      const prevWeek = currentWeek - 1;
+      const recentPairs = new Set();
+      const seasonPairCounts = {};
+
+      if (!data.podHistory) data.podHistory = {};
+      for (const [wkStr, pods] of Object.entries(data.podHistory)) {
+        const wk = parseInt(wkStr);
+        if (wk === currentWeek || !Array.isArray(pods)) continue;
+        pods.forEach(podPlayers => {
+          if (!Array.isArray(podPlayers)) return;
+          for (let i = 0; i < podPlayers.length; i++) {
+            for (let j = i + 1; j < podPlayers.length; j++) {
+              const key = [podPlayers[i].toLowerCase(), podPlayers[j].toLowerCase()].sort().join('||');
+              seasonPairCounts[key] = (seasonPairCounts[key] || 0) + 1;
+              if (wk === prevWeek) recentPairs.add(key);
+            }
+          }
+        });
+      }
+      return { recentPairs, seasonPairCounts };
+    }
+
+    function splitPoolIntoPods(shuffledPool) {
+      const total = shuffledPool.length;
+      let numPods = Math.ceil(total / 4);
+      if (total === 5) numPods = 2;
+      const baseSize = Math.floor(total / numPods);
+      let remainder = total % numPods;
+
+      const pods = [];
+      let idx = 0;
+      for (let t = 0; t < numPods; t++) {
+        const size = baseSize + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder--;
+        pods.push({
+          tableNumber: t + 1,
+          players: shuffledPool.slice(idx, idx + size)
+        });
+        idx += size;
+      }
+      return pods;
+    }
+
+    function scorePodsRepeatPenalty(pods, recentPairs, seasonPairCounts) {
+      let penalty = 0;
+      let backToBackCount = 0;
+      pods.forEach(pod => {
+        for (let i = 0; i < pod.players.length; i++) {
+          for (let j = i + 1; j < pod.players.length; j++) {
+            const key = [pod.players[i].toLowerCase(), pod.players[j].toLowerCase()].sort().join('||');
+            if (recentPairs.has(key)) {
+              penalty += 10;
+              backToBackCount++;
+            } else if (seasonPairCounts[key]) {
+              penalty += 2 * seasonPairCounts[key];
+            }
+          }
+        }
+      });
+      return { penalty, backToBackCount };
+    }
+
+    function generateRandomTables() {
+      const pool = [...getWeekAttendance(data.week)];
+      if (pool.length < 3) {
+        return alert('Need at least 3 checked-in players to generate pods (currently ' + pool.length + ').');
+      }
+
+      const { recentPairs, seasonPairCounts } = buildPodHistoryPairCounts(data.week);
+      let bestCandidates = [];
+      let lowestPenalty = Infinity;
+
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const candidate = [...pool];
+        for (let i = candidate.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [candidate[i], candidate[j]] = [candidate[j], candidate[i]];
+        }
+        const pods = splitPoolIntoPods(candidate);
+        const { penalty, backToBackCount } = scorePodsRepeatPenalty(pods, recentPairs, seasonPairCounts);
+
+        if (penalty < lowestPenalty) {
+          lowestPenalty = penalty;
+          bestCandidates = [{ pods, backToBackCount }];
+        } else if (penalty === lowestPenalty) {
+          bestCandidates.push({ pods, backToBackCount });
+        }
+      }
+
+      const chosen = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+
+      if (!data.podHistory) data.podHistory = {};
+      data.podHistory[data.week] = chosen.pods.map(p => [...p.players]);
+
+      const prevCount = (data.generatedTables && data.generatedTables.week === data.week)
+        ? (data.generatedTables.shuffleCount || 0)
+        : 0;
+
+      data.generatedTables = {
+        week: data.week,
+        shuffleCount: prevCount + 1,
+        backToBackRepeats: chosen.backToBackCount,
+        updatedAt: new Date().toISOString(),
+        pods: chosen.pods
+      };
       saveData();
       renderHome();
       renderAdmin();
     }
+
 
     function renderPodsHtml(pods) {
       return pods.map(pod => `
@@ -1604,7 +1715,229 @@
         return;
       }
       const rawName = (document.getElementById('voterName').value || '').trim();
+      const normName = rawName.toLowerCase();
+      if (!normName) {
+        document.getElementById('voteMsg').textContent = 'Please enter your name — required for one vote per person.';
+        return;
+      }
+      if (data.vote.voters.includes(normName)) {
+        document.getElementById('voteMsg').textContent = 'That name has already voted.';
+        return;
+      }
+      const opt = data.vote.options.find(o => o.id === selectedVoteId);
+      if (opt) {
+        opt.votes++;
+        data.vote.voters.push(normName);
+        if (!Array.isArray(data.vote.voterLog)) data.vote.voterLog = [];
+        data.vote.voterLog.push({
+          name: rawName.slice(0, 40),
+          optionId: opt.id,
+          optionLabel: opt.label,
+          date: new Date().toISOString()
+        });
+        localStorage.setItem('mtgLeagueMyVote', normName);
+        saveData();
+        selectedVoteId = null;
+        document.getElementById('voterName').value = '';
+        document.getElementById('voteMsg').textContent = 'Vote recorded! Thanks — you cannot vote again.';
+        renderVote();
+        if (adminUnlocked) renderAdmin();
+      }
+    }
+
+    function generateQR() {
+      const url = window.location.href.split('#').at(0);
+      document.getElementById('qrUrl').textContent = url;
+      const canvas = document.getElementById('qrCanvas');
+      new QRious({
+        element: canvas,
+        value: url,
+        size: 256,
+        background: '#ffffff',
+        foreground: '#0f0f14',
+        level: 'M'
+      });
+    }
+
+    function downloadQR() {
+      const canvas = document.getElementById('qrCanvas');
+      const link = document.createElement('a');
+      link.download = 'commander-league-qr.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    function unlockAdmin() {
+      const pass = document.getElementById('adminPass').value;
+      if (pass === data.adminPassword) {
+        adminUnlocked = true;
+        document.getElementById('adminGate').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        renderAdmin();
+        renderBoard();
+      } else {
+        alert('Incorrect password');
+      }
+    }
+
+    function lockAdmin() {
+      adminUnlocked = false;
+      document.getElementById('adminGate').classList.remove('hidden');
+      document.getElementById('adminPanel').classList.add('hidden');
+      document.getElementById('adminPass').value = '';
+      renderBoard();
+    }
+
+    function renderAdminAttendanceAndTables() {
+      const poolWeekEl = document.getElementById('adminPoolWeek');
+      if (poolWeekEl) poolWeekEl.textContent = data.week;
+
+      const poolEl = document.getElementById('adminCheckedInPool');
+      const checkedIn = getWeekAttendance(data.week);
+      if (poolEl) {
+        poolEl.innerHTML = checkedIn.length
+          ? checkedIn.map(name => `
+              <span class="pill-tag">
+                ${esc(name)}
+                <button type="button" title="Remove from tonight" onclick="removeCheckInPlayer('${esc(name).replace(/'/g, "\\'")}')">✕</button>
+              </span>
+            `).join('')
+          : '<span class="muted">No players checked in yet for Week ' + data.week + '.</span>';
+      }
+
+      const infoEl = document.getElementById('adminShuffleInfo');
+      const previewEl = document.getElementById('adminTablesPreview');
+      const gt = data.generatedTables;
+      if (gt && gt.week === data.week && Array.isArray(gt.pods) && gt.pods.length) {
+        if (infoEl) {
+          const timeStr = gt.updatedAt ? new Date(gt.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+          const repeatNote = typeof gt.backToBackRepeats === 'number'
+            ? ` · ${gt.backToBackRepeats} back-to-back repeat${gt.backToBackRepeats === 1 ? '' : 's'}`
+            : '';
+          infoEl.textContent = `Showing ${gt.pods.length} pod${gt.pods.length > 1 ? 's' : ''} for Week ${gt.week} (shuffled ${gt.shuffleCount}x${repeatNote}${timeStr ? ' · last at ' + timeStr : ''}) — live on Home page.`;
+        }
+        if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods);
+      } else {
+        if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
+        if (previewEl) previewEl.innerHTML = '';
+      }
+
+      const chartEl = document.getElementById('adminAttendanceChart');
+      if (chartEl) {
+        const allNames = new Set();
+        (data.players || []).forEach(p => { if (p.name) allNames.add(p.name.trim()); });
+        for (let w = 1; w <= NUM_WEEKS; w++) {
+          getWeekAttendance(w).forEach(n => allNames.add(n.trim()));
+        }
+        const sortedNames = [...allNames].sort((a, b) => a.localeCompare(b));
+        if (!sortedNames.length) {
+          chartEl.innerHTML = '<p class="muted">No players or check-ins recorded yet.</p>';
+        } else {
+          let tbl = '<table class="att-table" style="font-size:0.85rem"><thead><tr><th>Player</th>';
+          for (let w = 1; w <= NUM_WEEKS; w++) {
+            tbl += `<th>${weekLabel(w)}</th>`;
+          }
+          tbl += '<th>Total</th><th>Prize Status</th></tr></thead><tbody>';
+          sortedNames.forEach(name => {
+            let attendedCount = 0;
+            let row = `<tr><td>${esc(name)}</td>`;
+            for (let w = 1; w <= NUM_WEEKS; w++) {
+              const present = getWeekAttendance(w).some(n => n.toLowerCase() === name.toLowerCase());
+              if (present) attendedCount++;
+              row += present
+                ? '<td class="att-check">✓</td>'
+                : '<td class="att-miss">—</td>';
+            }
+            const status = getPlayerPrizeStatus(name);
+            row += `<td class="points" style="font-size:0.95rem">${attendedCount}/${NUM_WEEKS}</td>`;
+            row += `<td style="font-size:0.8rem;font-weight:600;color:${status.color}">${status.label}</td></tr>`;
+            tbl += row;
+          });
+          tbl += '</tbody></table>';
+          chartEl.innerHTML = tbl;
+        }
+      }
+    }
+
+    function renderAdminVoterLog() {
+      const logEl = document.getElementById('adminVoterLog');
+      if (!logEl) return;
+      const log = Array.isArray(data.vote.voterLog) ? data.vote.voterLog : [];
+      if (!log.length) {
+        if (Array.isArray(data.vote.voters) && data.vote.voters.length) {
+          logEl.innerHTML = `<p class="muted">Recorded voter names (legacy): ${data.vote.voters.map(v => esc(v)).join(', ')}</p>`;
+        } else {
+          logEl.innerHTML = '<p class="muted">No votes recorded yet.</p>';
+        }
+        return;
+      }
+      logEl.innerHTML = log.map(entry => {
+        const when = entry.date ? formatBoardDate(entry.date) : '';
+        return `<div class="voter-log-row">
+          <span><strong>${esc(entry.name)}</strong> → <span class="badge">${esc(entry.optionLabel || 'Option')}</span></span>
+          <span class="news-date">${when}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function buildChallengeSelectHtml(player, idx) {
+      const chVal = player.challengeWeek || '';
+      let html = `<select data-i="${idx}" class="player-challenge-wk" style="width:92px;padding:0.35rem">
+        <option value="">Not yet</option>`;
+      for (let w = 1; w <= NUM_WEEKS; w++) {
+        html += `<option value="${w}" ${Number(chVal) === w ? 'selected' : ''}>W${w}</option>`;
+      }
+      html += `</select>`;
+      return html;
+    }
+
+    function renderAdmin() {
+      document.getElementById('adminLeagueTitle').value = data.leagueTitle || '';
+      document.getElementById('adminSeason').value = data.season;
+      document.getElementById('adminWeek').value = data.week;
+      document.getElementById('adminStartDate').value = data.seasonStartDate || '';
+      const endEl = document.getElementById('adminEndDate');
+      if (endEl) endEl.value = data.seasonEndDate || '';
+      const lockEl = document.getElementById('adminAutoWeekLock');
+      if (lockEl) lockEl.checked = !!data.autoWeekLock;
+      const resetEl = document.getElementById('adminAutoResetEnabled');
+      if (resetEl) resetEl.checked = !!data.autoResetEnabled;
+      document.getElementById('voteDescription').value = data.vote.description;
+      const cfg = getFirebaseConfig();
+      const cfgInput = document.getElementById('firebaseConfigInput');
+      if (cfgInput && cfg && !cfgInput.value) {
+        cfgInput.value = JSON.stringify(cfg, null, 2);
+      }
+      updateCloudStatus();
+
+      renderAdminAttendanceAndTables();
+      renderAdminVoterLog();
+
+      const postWrap = document.getElementById('adminPostponeWeeks');
+      if (postWrap) {
+        postWrap.innerHTML = Array.from({ length: NUM_WEEKS }, (_, i) => {
+          const w = i + 1;
+          const checked = isWeekPostponed(w) ? 'checked' : '';
+          return `<label style="display:flex;align-items:center;gap:0.3rem;margin-right:0.75rem">
+            <input type="checkbox" class="postpone-check" value="${w}" ${checked}> W${w}
+          </label>`;
+        }).join('');
+      }
+
+      const mode = data.pointsMode || 'weekly';
+      const weeklyBtn = document.getElementById('modeWeeklyBtn');
+      const totalBtn = document.getElementById('modeTotalBtn');
+      if (weeklyBtn) weeklyBtn.classList.toggle('btn-primary', mode === 'weekly');
+      if (totalBtn) totalBtn.classList.toggle('btn-primary', mode === 'total');
+      const help = document.getElementById('pointsModeHelp');
+      if (help) {
+        help.textContent = mode === 'total'
       const pList = document.getElementById('adminPlayers');
+      if (mode === 'total') {
+        let table = `<table style="font-size:0.9rem"><thead><tr>
+          <th>Player</th><th>Total points</th><th>Challenge</th><th></th></tr></thead><tbody>`;
+        // ... all the way to </html>
+
       if (mode === 'total') {
         let table = `<table style="font-size:0.9rem"><thead><tr>
           <th>Player</th><th>Total points</th><th>Challenge</th><th></th></tr></thead><tbody>`;
