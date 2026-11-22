@@ -10,6 +10,7 @@
   <script src="https://gstatic.com"></script>
   <script src="https://gstatic.com"></script>
 
+
   <style>
     :root {
       --bg: #0f0f14;
@@ -1937,6 +1938,16 @@
         let table = `<table style="font-size:0.9rem"><thead><tr>
           <th>Player</th><th>Total points</th><th>Challenge</th><th></th></tr></thead><tbody>`;
         // ... all the way to </html>
+	  const help = document.getElementById('pointsModeHelp');
+      if (help) {
+        help.textContent = mode === 'total'
+          ? 'Enter each player’s total points and mark the week they completed the Season Challenge.'
+          : 'Enter points for each week and mark the week each player completed the Season Challenge (once per season).';
+      }
+
+      const pList = document.getElementById('adminPlayers');
+      if (mode === 'total') {
+
 
       if (mode === 'total') {
         let table = `<table style="font-size:0.9rem"><thead><tr>
