@@ -279,6 +279,50 @@
       background: none; border: none; color: var(--danger);
       cursor: pointer; font-weight: 700; font-size: 0.9rem; line-height: 1;
     }
+	    .deck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .deck-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.65rem;
+    }
+    .deck-card.active-deck { border-color: var(--accent); }
+    .bracket-pill {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 700;
+    }
+    .bracket-1 { background: rgba(74,155,94,0.2); color: #6cd484; border: 1px solid #4a9b5e; }
+    .bracket-2 { background: rgba(91,159,212,0.2); color: #7ec2f7; border: 1px solid #5b9fd4; }
+    .bracket-3 { background: rgba(201,162,39,0.2); color: #e8c34a; border: 1px solid #c9a227; }
+    .bracket-4 { background: rgba(212,91,74,0.2); color: #f27b6b; border: 1px solid #d45b4a; }
+    .power-meter-segments {
+      display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px;
+      margin: 0.35rem 0;
+    }
+    .power-seg {
+      height: 8px; border-radius: 2px; background: var(--border);
+    }
+    .power-seg.on-low { background: #4a9b5e; }
+    .power-seg.on-mid { background: #5b9fd4; }
+    .power-seg.on-high { background: #c9a227; }
+    .power-seg.on-cedh { background: #d45b4a; }
+    .mini-stat-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.78rem; color: var(--text-muted); gap: 0.5rem; margin-top: 0.25rem;
+    }
+    .mini-bar-wrap {
+      flex: 1; height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden;
+    }
+    .mini-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
     footer {
       text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.8rem;
       border-top: 1px solid var(--border);
@@ -295,6 +339,7 @@
       <nav>
         <button data-section="home" class="active" onclick="showSection('home')">Home</button>
         <button data-section="standings" onclick="showSection('standings')">Standings</button>
+		<button data-section="decks" onclick="showSection('decks')">Decks</button>
         <button data-section="news" onclick="showSection('news')">News</button>
         <button data-section="board" onclick="showSection('board')">Message Board</button>
         <button data-section="docs" onclick="showSection('docs')">Documents</button>
@@ -351,7 +396,75 @@
     </section>
 
     <!-- STANDINGS -->
-    <section id="standings" class="section">
+     <!-- DECKS & POWER ANALYZER -->
+	 <section id="decks" class="section">
+	   <h1>Commander Decks &amp; Power Analyzer</h1>
+	   <p class="muted">Create a player profile with a 4-digit PIN to save all your decklists and generate a visual Bracket (1–4) + Power Level (1–10) breakdown.</p>
+
+	   <!-- PLAYER ACCOUNT BAR -->
+	   <div class="card" id="deckAccountCard">
+		 <div id="deckLoggedOutView">
+		   <h2>👤 Player Deck Vault Login / Register</h2>
+		   <p class="muted">Pick or enter your player name and a 4-digit PIN to manage your saved decks.</p>
+		   <div class="flex mt-1">
+			 <input type="text" id="deckLoginName" list="knownPlayersList" placeholder="Player name" maxlength="40" style="max-width:210px">
+			 <input type="password" id="deckLoginPin" placeholder="4-digit PIN" maxlength="8" style="max-width:130px">
+			 <button class="btn btn-primary" onclick="loginOrRegisterDeckProfile()">Open My Vault</button>
+		   </div>
+		   <p class="muted mt-1" id="deckAuthMsg"></p>
+		 </div>
+
+		 <div id="deckLoggedInView" class="hidden">
+		   <div class="flex" style="justify-content:space-between">
+			 <div>
+			   <h2 style="margin:0">📦 <span id="deckVaultOwnerName"></span>'s Deck Vault</h2>
+			   <p class="muted" style="font-size:0.85rem">Register a new deck or switch which deck you're piloting tonight.</p>
+			 </div>
+			 <button class="btn btn-sm" onclick="logoutDeckProfile()">Sign Out</button>
+		   </div>
+
+		   <div class="admin-grid mt-2">
+			 <div class="form-group">
+			   <label>Deck Name</label>
+			   <input type="text" id="newDeckTitle" placeholder="e.g., Tenth Doctor Timey-Wimey" maxlength="60">
+			 </div>
+			 <div class="form-group">
+			   <label>Commander(s)</label>
+			   <input type="text" id="newDeckCommander" placeholder="e.g., The Tenth Doctor + Clara Oswald" maxlength="80">
+			 </div>
+		   </div>
+		   <div class="form-group">
+			 <label>Moxfield / Archidekt Link (optional)</label>
+			 <input type="url" id="newDeckUrl" placeholder="https://moxfield.com...">
+		   </div>
+		   <div class="form-group">
+			 <label>Paste Decklist (1 Card Name per line — exported as Text from Moxfield/Archidekt)</label>
+			 <textarea id="newDeckListText" rows="7" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Rhystic Study&#10;1 Cyclonic Rift&#10;..."></textarea>
+		   </div>
+		   <div class="flex">
+			 <button class="btn btn-primary" onclick="savePlayerDeck()">Analyze &amp; Save Deck</button>
+			 <button class="btn" onclick="previewDeckAnalysis()">Preview Power Only</button>
+		   </div>
+		   <div id="deckPreviewBox" class="mt-2"></div>
+
+		   <h3 class="mt-2">My Saved Decks</h3>
+		   <div id="mySavedDecksGrid" class="deck-grid mt-1"></div>
+		 </div>
+	   </div>
+
+	   <!-- PUBLIC LEAGUE DECK SHOWCASE -->
+	   <div class="card">
+		 <div class="flex" style="justify-content:space-between;margin-bottom:0.75rem">
+		   <h2 style="margin:0">⚔️ Registered League Decks</h2>
+		   <label style="display:flex;align-items:center;gap:0.4rem;margin:0;cursor:pointer;color:var(--text)">
+			 <input type="checkbox" id="showAllVaultDecksToggle" onchange="renderDecks()" style="width:auto">
+			 Show all saved decks (not just Active)
+		   </label>
+		 </div>
+		 <div id="publicDecksGrid" class="deck-grid"></div>
+	   </div>
+	 </section>
+
       <h1>League Standings</h1>
       <p class="muted" id="standingsMeta"></p>
       <div class="card" style="overflow-x:auto">
@@ -894,6 +1007,9 @@
     }
     function migrateData(d) {
       if (!d.leagueTitle) d.leagueTitle = DEFAULT_DATA.leagueTitle;
+	  if (!d.playerProfiles || typeof d.playerProfiles !== 'object') {
+        d.playerProfiles = {};
+      }
       if (!d.seasonStartDate) d.seasonStartDate = DEFAULT_DATA.seasonStartDate;
       if (!d.seasonEndDate) d.seasonEndDate = DEFAULT_DATA.seasonEndDate;
       if (typeof d.autoWeekLock !== 'boolean') d.autoWeekLock = false;
@@ -2268,6 +2384,397 @@
       d.textContent = str;
       return d.innerHTML;
     }
+	 // ========== PLAYER ACCOUNTS & VISUAL DECK POWER ANALYZER ==========
+	 let currentDeckUser = null;
+
+     const GAME_CHANGERS_LIST = new Set([
+	   "ad nauseam", "ancient tomb", "aura shards", "bolas's citadel", "chrome mox",
+	   "consecrated sphinx", "cyclonic rift", "deflecting swat", "demonic tutor",
+	   "dockside extortionist", "drannith magistrate", "enlightened tutor", "expropriate",
+	   "fierce guardianship", "force of will", "gaea's cradle", "gifts ungiven",
+	   "grand arbiter augustin iv", "grim monolith", "imperial seal", "intuition",
+	   "jeska's will", "jeweled lotus", "jin-gitaxias, core augur", "kinnan, bonder prodigy",
+	   "lion's eye diamond", "mana crypt", "mana drain", "mana vault", "mox diamond",
+	   "mystical tutor", "narset, parter of veils", "notion thief", "opposition agent",
+	   "orcish bowmasters", "panoptic mirror", "rhystic study", "seedborn muse",
+	   "serra's sanctum", "smothering tithe", "survival of the fittest", "tergrid, god of fright",
+	   "thassa's oracle", "the one ring", "the tabernacle at pendrell vale", "trinisphere",
+	   "trouble in pairs", "underworld breach", "urza, lord high artificer", "vampiric tutor",
+	   "vorinclex, voice of hunger", "winota, joiner of forces", "worldly tutor", "yawgmoth's will"
+	 ]);
+
+	 const TUTOR_KEYWORDS = [
+	   "demonic tutor", "vampiric tutor", "enlightened tutor", "mystical tutor", "worldly tutor",
+	   "imperial seal", "gamble", "grim tutor", "diabolic intent", "chord of calling",
+	   "green sun's zenith", "finale of devastation", "natural order", "eldritch evolution",
+	   "survival of the fittest", "fauna shaman", "birthing pod", "tinker", "fabricate",
+	   "whir of invention", "reshape", "idyllic tutor", "academy rector", "intuition",
+	   "gifts ungiven", "entomb", "buried alive", "beseech the mirror", "wishclaw talisman",
+	   "expedition map", "crop rotation", "sylvan scrying", "urza's saga"
+	 ];
+
+	 const FAST_MANA_LIST = new Set([
+	   "sol ring", "mana crypt", "mana vault", "chrome mox", "mox diamond", "mox opal",
+	   "mox amber", "lion's eye diamond", "lotus petal", "jeweled lotus", "grim monolith",
+	   "ancient tomb", "gaea's cradle", "serra's sanctum", "nykthos, shrine to nyx",
+	   "dark ritual", "cabal ritual", "rite of flame", "desperate ritual", "pyretic ritual",
+	   "jeska's will", "dockside extortionist", "elvish spirit guide", "simian spirit guide",
+	   "carpet of flowers", "exploration", "burgeoning", "wild growth", "utopia sprawl"
+	 ]);
+
+	 const MASS_LAND_DENIAL = new Set([
+	   "armageddon", "ravages of war", "catastrophe", "winter orb", "static orb",
+	   "stasis", "blood moon", "magus of the moon", "back to basics", "ruination",
+	   "jokulhaups", "obliterate", "decree of annihilation", "sunder", "vorinclex, voice of hunger"
+	 ]);
+
+	function analyzeDecklistText(rawText) {
+	  const lines = (rawText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+	  const cards = [];
+	  let totalCards = 0;
+
+	  lines.forEach(line => {
+		if (/^(deck|commander|sideboard|maybeboard|about|name)\b/i.test(line)) return;
+		const m = line.match(/^(\d+)x?\s+([^(#\n\r]+)/i);
+		const qty = m ? parseInt(m[1]) : 1;
+		const name = (m ? m[2] : line).replace(/\*[A-Z]+\*/g, '').trim();
+		if (!name) return;
+		cards.push({ qty, name });
+		totalCards += qty;
+	   });
+
+	   const foundGameChangers = [];
+	   const foundTutors = [];
+	   const foundFastMana = [];
+	   const foundMLD = [];
+	   let interactionCount = 0;
+
+	   cards.forEach(({ qty, name }) => {
+		 const lower = name.toLowerCase();
+		 if (GAME_CHANGERS_LIST.has(lower)) foundGameChangers.push(name);
+		 if (TUTOR_KEYWORDS.includes(lower) || /\btutor\b/i.test(lower)) foundTutors.push(name);
+		 if (FAST_MANA_LIST.has(lower)) foundFastMana.push(name);
+		 if (MASS_LAND_DENIAL.has(lower)) foundMLD.push(name);
+		 if (/(counterspell|swan song|negate|arcane denial|fierce guardianship|force of will|force of negation|pact of negation|mana drain|dovin's veto|swords to plowshares|path to exile|beast within|generous gift|chaos warp|assassin's trophy|abrupt decay|deadly rollick|cyclonic rift|wrath of god|farewell|toxic deluge|blasphemous act|damnation|austere command)/i.test(lower)) {
+		   interactionCount += qty;
+		 }
+	   });
+
+	   const gcCount = foundGameChangers.length;
+	   const tutorCount = foundTutors.length;
+	   const fastManaCount = foundFastMana.length;
+	   const mldCount = foundMLD.length;
+
+	   // Official Commander Bracket (1–4)
+	   let bracket = 2;
+	   let bracketLabel = 'Bracket 2 · Core';
+	   if (gcCount >= 4 || mldCount >= 1 || (gcCount >= 3 && fastManaCount >= 5)) {
+		 bracket = 4;
+		 bracketLabel = 'Bracket 4 · Optimized';
+	   } else if (gcCount >= 1 || tutorCount >= 4 || fastManaCount >= 4) {
+		 bracket = 3;
+		 bracketLabel = 'Bracket 3 · Upgraded';
+	   } else if (gcCount === 0 && tutorCount === 0 && fastManaCount <= 1) {
+		 bracket = 1;
+		 bracketLabel = 'Bracket 1 · Exhibition';
+	   }
+
+	   // 1–10 Power Score
+	   const rawScore = 3.0 + (gcCount * 0.85) + (tutorCount * 0.4) + (fastManaCount * 0.35) + (mldCount * 1.0) + Math.min(interactionCount * 0.12, 1.2);
+	   const power10 = Math.max(1, Math.min(10, Math.round(rawScore * 10) / 10));
+
+	   return {
+		 totalCards,
+		 bracket,
+		 bracketLabel,
+		 power10,
+		 gcCount,
+		 tutorCount,
+		 fastManaCount,
+		 interactionCount,
+		 foundGameChangers,
+		 foundTutors,
+		 foundFastMana,
+		 foundMLD
+	   };
+	 }
+
+	function renderPowerWidgetHtml(stats) {
+	   const segsOn = Math.round(stats.power10);
+	   const tierClass = segsOn <= 3 ? 'on-low' : segsOn <= 6 ? 'on-mid' : segsOn <= 8 ? 'on-high' : 'on-cedh';
+	   let segsHtml = '';
+	   for (let s = 1; s <= 10; s++) {
+		 segsHtml += `<div class="power-seg ${s <= segsOn ? tierClass : ''}"></div>`;
+	   }
+	   const gcPct = Math.min(100, stats.gcCount * 20);
+	   const tutPct = Math.min(100, stats.tutorCount * 14);
+	   const fmPct = Math.min(100, stats.fastManaCount * 14);
+	   const intPct = Math.min(100, stats.interactionCount * 8);
+
+	   return `
+		 <div style="margin-top:0.35rem">
+		   <div class="flex" style="justify-content:space-between">
+			 <span class="bracket-pill bracket-${stats.bracket}">${stats.bracketLabel}</span>
+			 <span style="font-weight:700;color:var(--accent);font-size:0.9rem">Power ${stats.power10}/10</span>
+		   </div>
+		   <div class="power-meter-segments">${segsHtml}</div>
+		   <div class="mini-stat-row"><span>Game Changers (${stats.gcCount})</span><div class="mini-bar-wrap"><div class="mini-bar-fill" style="width:${gcPct}%"></div></div></div>
+		   <div class="mini-stat-row"><span>Tutors (${stats.tutorCount})</span><div class="mini-bar-wrap"><div class="mini-bar-fill" style="width:${tutPct}%"></div></div></div>
+		   <div class="mini-stat-row"><span>Fast Mana (${stats.fastManaCount})</span><div class="mini-bar-wrap"><div class="mini-bar-fill" style="width:${fmPct}%"></div></div></div>
+		   <div class="mini-stat-row"><span>Interaction (${stats.interactionCount})</span><div class="mini-bar-wrap"><div class="mini-bar-fill" style="width:${intPct}%"></div></div></div>
+		   ${stats.foundGameChangers.length ? `<div class="muted" style="font-size:0.75rem;margin-top:0.4rem"><strong>Game Changers:</strong> ${stats.foundGameChangers.map(esc).join(', ')}</div>` : ''}
+		 </div>
+	   `;
+	 }
+
+	function loginOrRegisterDeckProfile() {
+	   const rawName = (document.getElementById('deckLoginName').value || '').trim();
+	   const pin = (document.getElementById('deckLoginPin').value || '').trim();
+	   const msgEl = document.getElementById('deckAuthMsg');
+	   if (!rawName) return (msgEl.textContent = 'Enter your player name.');
+	   if (!/^\d{4,8}$/.test(pin)) return (msgEl.textContent = 'Enter a 4–8 digit PIN.');
+
+	   if (!data.playerProfiles) data.playerProfiles = {};
+	   const key = rawName.toLowerCase();
+	   const existing = data.playerProfiles[key];
+	   if (existing) {
+		 if (existing.pin !== pin) {
+		   msgEl.textContent = 'Incorrect PIN for ' + existing.displayName + '.';
+		   return;
+		 }
+		 currentDeckUser = key;
+	   } else {
+		 data.playerProfiles[key] = {
+		   displayName: rawName.slice(0, 40),
+		   pin,
+		   decks: []
+		 };
+		 currentDeckUser = key;
+		 saveData();
+	   }
+	   msgEl.textContent = '';
+	   document.getElementById('deckLoginPin').value = '';
+	   renderDecks();
+	 }
+
+	function logoutDeckProfile() {
+	   currentDeckUser = null;
+	   renderDecks();
+	 }
+
+	 function previewDeckAnalysis() {
+	   const rawText = document.getElementById('newDeckListText').value;
+	   const box = document.getElementById('deckPreviewBox');
+	   if (!rawText.trim()) return (box.innerHTML = '<p class="muted">Paste a decklist first to preview.</p>');
+	   const stats = analyzeDecklistText(rawText);
+	   box.innerHTML = `<div class="card" style="background:var(--surface2);margin-bottom:0">
+		 <div class="muted" style="font-size:0.82rem">Preview (${stats.totalCards} cards detected)</div>
+		 ${renderPowerWidgetHtml(stats)}
+	   </div>`;
+	 }
+
+    function savePlayerDeck() {
+      if (!currentDeckUser || !data.playerProfiles[currentDeckUser]) return;
+      const title = (document.getElementById('newDeckTitle').value || '').trim();
+      const commander = (document.getElementById('newDeckCommander').value || '').trim();
+      const url = (document.getElementById('newDeckUrl').value || '').trim();
+      const rawText = (document.getElementById('newDeckListText').value || '').trim();
+      if (!title || !commander) return alert('Enter both a Deck Name and Commander.');
+      if (!rawText) return alert('Paste your decklist so we can analyze its Bracket and Power Level.');
+
+      const stats = analyzeDecklistText(rawText);
+      const profile = data.playerProfiles[currentDeckUser];
+      if (!Array.isArray(profile.decks)) profile.decks = [];
+
+      profile.decks.forEach(function(d) { d.active = false; });
+      profile.decks.unshift({
+        id: Date.now(),
+        title: title.slice(0, 60),
+        commander: commander.slice(0, 80),
+        url: url.slice(0, 200),
+        rawList: rawText.slice(0, 4500),
+        active: true,
+        stats: stats,
+        updatedAt: new Date().toISOString()
+      });
+
+      document.getElementById('newDeckTitle').value = '';
+      document.getElementById('newDeckCommander').value = '';
+      document.getElementById('newDeckUrl').value = '';
+      document.getElementById('newDeckListText').value = '';
+      document.getElementById('deckPreviewBox').innerHTML = '';
+
+      saveData();
+      renderDecks();
+    }
+
+    function setActivePlayerDeck(deckId) {
+      if (!currentDeckUser || !data.playerProfiles[currentDeckUser]) return;
+      const profile = data.playerProfiles[currentDeckUser];
+      profile.decks.forEach(function(d) { d.active = (d.id === deckId); });
+      saveData();
+      renderDecks();
+    }
+
+    function deletePlayerDeck(deckId) {
+      if (!currentDeckUser || !data.playerProfiles[currentDeckUser]) return;
+      if (!confirm('Delete this saved deck?')) return;
+      const profile = data.playerProfiles[currentDeckUser];
+      profile.decks = profile.decks.filter(function(d) { return d.id !== deckId; });
+      if (profile.decks.length && !profile.decks.some(function(d) { return d.active; })) {
+        profile.decks.at(0).active = true;
+      }
+      saveData();
+      renderDecks();
+    }
+
+    function viewDecklistModal(ownerKey, deckId) {
+      const profile = data.playerProfiles && data.playerProfiles[ownerKey];
+      const deck = profile && profile.decks && profile.decks.find(function(d) { return d.id === deckId; });
+      if (!deck) return;
+      alert(
+        deck.title + ' (' + deck.commander + ') — Piloted by ' + profile.displayName + '\n' +
+        deck.stats.bracketLabel + ' · Power ' + deck.stats.power10 + '/10\n\n' +
+        deck.rawList
+      );
+    }
+
+    function buildDeckCardHtml(ownerKey, ownerName, deck, isOwnerView) {
+      const card = document.createElement('div');
+      card.className = 'deck-card' + (deck.active ? ' active-deck' : '');
+
+      const top = document.createElement('div');
+      const header = document.createElement('div');
+      header.className = 'flex';
+      header.style.justifyContent = 'space-between';
+
+      if (isOwnerView) {
+        const strong = document.createElement('strong');
+        strong.textContent = deck.title;
+        header.appendChild(strong);
+        if (deck.active) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = 'Active Tonight';
+          header.appendChild(badge);
+        }
+      } else {
+        const ownerBadge = document.createElement('span');
+        ownerBadge.className = 'badge';
+        ownerBadge.textContent = ownerName;
+        header.appendChild(ownerBadge);
+        if (deck.active) {
+          const actLabel = document.createElement('span');
+          actLabel.className = 'muted';
+          actLabel.style.fontSize = '0.75rem';
+          actLabel.textContent = 'Active';
+          header.appendChild(actLabel);
+        }
+      }
+      top.appendChild(header);
+
+      if (!isOwnerView) {
+        const h3 = document.createElement('h3');
+        h3.style.marginTop = '0.35rem';
+        h3.textContent = deck.title;
+        top.appendChild(h3);
+      }
+
+      const cmdDiv = document.createElement('div');
+      cmdDiv.className = 'muted';
+      cmdDiv.style.fontSize = '0.84rem';
+      cmdDiv.textContent = deck.commander;
+      top.appendChild(cmdDiv);
+
+      const statsWrap = document.createElement('div');
+      statsWrap.innerHTML = renderPowerWidgetHtml(deck.stats);
+      top.appendChild(statsWrap);
+      card.appendChild(top);
+
+      const actions = document.createElement('div');
+      actions.className = 'flex mt-1';
+
+      if (isOwnerView && !deck.active) {
+        const setBtn = document.createElement('button');
+        setBtn.className = 'btn btn-sm btn-primary';
+        setBtn.textContent = 'Set Active';
+        setBtn.onclick = function() { setActivePlayerDeck(deck.id); };
+        actions.appendChild(setBtn);
+      }
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn btn-sm';
+      viewBtn.textContent = 'View List';
+      viewBtn.onclick = function() { viewDecklistModal(ownerKey, deck.id); };
+      actions.appendChild(viewBtn);
+
+      if (isOwnerView) {
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-sm btn-danger';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = function() { deletePlayerDeck(deck.id); };
+        actions.appendChild(delBtn);
+      } else if (deck.url) {
+        const extLink = document.createElement('a');
+        extLink.className = 'btn btn-sm';
+        extLink.href = deck.url;
+        extLink.target = '_blank';
+        extLink.rel = 'noopener';
+        extLink.style.textDecoration = 'none';
+        extLink.textContent = 'External Link ↗';
+        actions.appendChild(extLink);
+      }
+
+      card.appendChild(actions);
+      return card;
+    }
+
+    function renderDecks() {
+      const loggedOut = document.getElementById('deckLoggedOutView');
+      const loggedIn = document.getElementById('deckLoggedInView');
+      if (!loggedOut || !loggedIn) return;
+
+      if (currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
+        const profile = data.playerProfiles[currentDeckUser];
+        loggedOut.classList.add('hidden');
+        loggedIn.classList.remove('hidden');
+        document.getElementById('deckVaultOwnerName').textContent = profile.displayName;
+
+        const myGrid = document.getElementById('mySavedDecksGrid');
+        myGrid.innerHTML = '';
+        if (profile.decks && profile.decks.length) {
+          profile.decks.forEach(function(d) {
+            myGrid.appendChild(buildDeckCardHtml(currentDeckUser, profile.displayName, d, true));
+          });
+        } else {
+          myGrid.innerHTML = '<p class="muted">No decks saved yet. Paste a decklist above to register your first deck!</p>';
+        }
+      } else {
+        loggedOut.classList.remove('hidden');
+        loggedIn.classList.add('hidden');
+      }
+
+      const publicGrid = document.getElementById('publicDecksGrid');
+      const showAll = !!(document.getElementById('showAllVaultDecksToggle') && document.getElementById('showAllVaultDecksToggle').checked);
+      publicGrid.innerHTML = '';
+      let count = 0;
+
+      Object.entries(data.playerProfiles || {}).forEach(function(entry) {
+        const ownerKey = entry.at(0);
+        const profile = entry.at(1);
+        (profile.decks || []).forEach(function(d) {
+          if (showAll || d.active) {
+            publicGrid.appendChild(buildDeckCardHtml(ownerKey, profile.displayName, d, false));
+            count++;
+          }
+        });
+      });
+
+      if (!count) {
+        publicGrid.innerHTML = '<p class="empty" style="grid-column:1/-1">No decks registered yet. Sign in above to add yours!</p>';
+      }
+    }
+
 
     // Init
     loadData();
