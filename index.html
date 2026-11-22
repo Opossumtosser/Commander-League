@@ -14,8 +14,6 @@
 
 
 
-
-
   <style>
     :root {
       --bg: #0f0f14;
@@ -1390,13 +1388,25 @@
       return false;
     }
 
-    function getPlayerSeasonAttendanceCount(playerName) {
-      let count = 0;
-      for (let w = 1; w <= NUM_WEEKS; w++) {
-        if (isPlayerPresentInWeek(playerName, w)) count++;
-      }
-      return count;
-    }
+    function isPlayerPresentInWeek(playerName, w) {
+	   const norm = playerName.trim().toLowerCase();
+	   if (getWeekAttendance(w).some(n => n.toLowerCase() === norm)) return true;
+	   const playerObj = (data.players || []).find(p => (p.name || '').trim().toLowerCase() === norm);
+	   if (playerObj) {
+		 ensureWeekly(playerObj);
+		 if ((parseInt(playerObj.weeklyPoints[w - 1]) || 0) > 0) return true;
+	   }
+	   return false;
+	 }
+
+	function getPlayerSeasonAttendanceCount(playerName) {
+	   let count = 0;
+	   for (let w = 1; w <= NUM_WEEKS; w++) {
+		 if (isPlayerPresentInWeek(playerName, w)) count++;
+	   }
+	   return count;
+	 }
+
 
 
     function getPlayerPrizeStatus(playerName) {
