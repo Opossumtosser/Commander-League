@@ -13,6 +13,7 @@
 
 
 
+
   <style>
     :root {
       --bg: #0f0f14;
@@ -1374,15 +1375,27 @@
     }
 
     // ========== PRIZE ELIGIBILITY & TIE-BREAKERS ==========
+    function isPlayerPresentInWeek(playerName, w) {
+      const norm = playerName.trim().toLowerCase();
+      // 1. Checked in via Home page or Admin Check-In
+      if (getWeekAttendance(w).some(n => n.toLowerCase() === norm)) return true;
+      // 2. Has points recorded for that week in Standings
+      const playerObj = (data.players || []).find(p => (p.name || '').trim().toLowerCase() === norm);
+      if (playerObj) {
+        ensureWeekly(playerObj);
+        if ((parseInt(playerObj.weeklyPoints[w - 1]) || 0) > 0) return true;
+      }
+      return false;
+    }
+
     function getPlayerSeasonAttendanceCount(playerName) {
       let count = 0;
       for (let w = 1; w <= NUM_WEEKS; w++) {
-        if (getWeekAttendance(w).some(n => n.toLowerCase() === playerName.trim().toLowerCase())) {
-          count++;
-        }
+        if (isPlayerPresentInWeek(playerName, w)) count++;
       }
       return count;
     }
+
 
     function getPlayerPrizeStatus(playerName) {
       const weeksAttended = getPlayerSeasonAttendanceCount(playerName);
@@ -1845,7 +1858,7 @@
             let attendedCount = 0;
             let row = `<tr><td>${esc(name)}</td>`;
             for (let w = 1; w <= NUM_WEEKS; w++) {
-              const present = getWeekAttendance(w).some(n => n.toLowerCase() === name.toLowerCase());
+              const present = isPlayerPresentInWeek(name, w);
               if (present) attendedCount++;
               row += present
                 ? '<td class="att-check">✓</td>'
