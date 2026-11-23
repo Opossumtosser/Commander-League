@@ -1045,6 +1045,34 @@
         if (p.challengeWeek === undefined) p.challengeWeek = null;
       });
     }
+    function playerTotal(p) {
+      ensureWeekly(p);
+      return p.weeklyPoints.reduce((s, v) => s + (parseInt(v) || 0), 0);
+    }
+
+    function ensureWeekly(p) {
+      if (!Array.isArray(p.weeklyPoints) || p.weeklyPoints.length !== NUM_WEEKS) {
+        const old = typeof p.points === 'number' ? p.points : 0;
+        p.weeklyPoints = Array(NUM_WEEKS).fill(0);
+        if (old > 0) p.weeklyPoints.splice(0, 1, old);
+        delete p.points;
+      }
+    }
+     function showSection(id) {
+       const target = document.getElementById(id);
+       if (!target) {
+         console.warn('Section not found:', id);
+         return;
+       }
+       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+       target.classList.add('active');
+       document.querySelectorAll('nav button').forEach(b => {
+         b.classList.toggle('active', b.dataset.section === id);
+       });
+       if (id === 'qr') generateQR();
+       if (id === 'admin' && adminUnlocked) renderAdmin();
+       renderAll();
+     }
 
 
     function ensureWeekly(p) {
