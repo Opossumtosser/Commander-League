@@ -549,12 +549,14 @@
     <section id="admin" class="section">
       <h1>Admin Panel</h1>
       <div id="adminGate" class="card">
-        <p class="muted">Enter admin password to edit league data. Default: <code>commander</code></p>
+        <p class="muted">Enter admin password to edit league data.</p>
         <div class="form-group">
           <input type="password" id="adminPass" placeholder="Password">
         </div>
         <button class="btn btn-primary" onclick="unlockAdmin()">Unlock</button>
       </div>
+
+
       <div id="adminPanel" class="hidden">
         <div class="card">
           <h2>League Title, Season & Week</h2>
@@ -618,8 +620,10 @@
 
           <div class="flex mt-2">
             <button class="btn btn-primary" onclick="generateRandomTables()">🔀 Shuffle &amp; Generate Tables (3–4/pod)</button>
+            <button class="btn" id="publishTablesBtn" onclick="togglePublishTables()">📢 Publish Tables to Home</button>
             <button class="btn btn-danger" onclick="clearGeneratedTables()">Clear Tables</button>
           </div>
+
           <p class="muted mt-1" id="adminShuffleInfo"></p>
 
           <div id="adminTablesPreview" class="tables-grid mt-2"></div>
@@ -1007,7 +1011,7 @@
     }
     function migrateData(d) {
       if (!d.leagueTitle) d.leagueTitle = DEFAULT_DATA.leagueTitle;
-	  if (!d.playerProfiles || typeof d.playerProfiles !== 'object') {
+      if (!d.playerProfiles || typeof d.playerProfiles !== 'object') {
         d.playerProfiles = {};
       }
       if (!d.seasonStartDate) d.seasonStartDate = DEFAULT_DATA.seasonStartDate;
@@ -1030,7 +1034,10 @@
         d.podHistory = {};
       }
       if (!d.generatedTables || typeof d.generatedTables !== 'object') {
-        d.generatedTables = { week: null, shuffleCount: 0, backToBackRepeats: 0, updatedAt: null, pods: [] };
+        d.generatedTables = { week: null, shuffleCount: 0, backToBackRepeats: 0, published: false, updatedAt: null, pods: [] };
+      }
+      if (typeof d.generatedTables.published !== 'boolean') {
+        d.generatedTables.published = false;
       }
       if (!Array.isArray(d.generatedTables.pods)) d.generatedTables.pods = [];
       (d.players || []).forEach(p => {
@@ -1039,10 +1046,6 @@
       });
     }
 
-    function playerTotal(p) {
-      ensureWeekly(p);
-      return p.weeklyPoints.reduce((s, v) => s + (parseInt(v) || 0), 0);
-    }
 
     function ensureWeekly(p) {
       if (!Array.isArray(p.weeklyPoints) || p.weeklyPoints.length !== NUM_WEEKS) {
@@ -1464,22 +1467,53 @@
       const chosen = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
 
       if (!data.podHistory) data.podHistory = {};
-      data.podHistory[data.week] = chosen.pods.map(p => [...p.players]);
+      data.podHistory[data.week] = chosen.pods.map(function(p) { return [...p.players]; });
 
-      const prevCount = (data.generatedTables && data.generatedTables.week === data.week)
-        ? (data.generatedTables.shuffleCount || 0)
-        : 0;
+      const isSameWeek = data.generatedTables && data.generatedTables.week === data.week;
+      const prevCount = isSameWeek ? (data.generatedTables.shuffleCount || 0) : 0;
+      const keepPublished = isSameWeek ? !!data.generatedTables.published : false;
 
       data.generatedTables = {
         week: data.week,
         shuffleCount: prevCount + 1,
         backToBackRepeats: chosen.backToBackCount,
+        published: keepPublished,
         updatedAt: new Date().toISOString(),
         pods: chosen.pods
       };
       saveData();
       renderHome();
       renderAdmin();
+    }
+
+    function togglePublishTables() {
+      if (!adminUnlocked) return;
+      const gt = data.generatedTables;
+      if (!gt || gt.week !== data.week || !Array.isArray(gt.pods) || !gt.pods.length) {
+        return alert('Generate tables first before publishing.');
+      }
+      gt.published = !gt.published;
+      saveData();
+      renderHome();
+      renderAdmin();
+    }
+
+    function clearGeneratedTables() {
+      if (!adminUnlocked) return;
+      if (!confirm('Clear tonight\'s generated tables?')) return;
+      data.generatedTables = {
+        week: null,
+        shuffleCount: 0,
+        backToBackRepeats: 0,
+        published: false,
+        updatedAt: null,
+        pods: []
+      };
+      saveData();
+      renderHome();
+      renderAdmin();
+    }
+
     }
 
 
@@ -1633,16 +1667,17 @@
       const tablesMeta = document.getElementById('homeTablesMeta');
       const gt = data.generatedTables;
       if (tablesGrid) {
-        if (gt && gt.week === data.week && Array.isArray(gt.pods) && gt.pods.length) {
+        if (gt && gt.published && gt.week === data.week && Array.isArray(gt.pods) && gt.pods.length) {
           if (tablesMeta) {
-            tablesMeta.textContent = `Week ${gt.week} · ${gt.pods.length} table${gt.pods.length > 1 ? 's' : ''}`;
+            tablesMeta.textContent = 'Week ' + gt.week + ' · ' + gt.pods.length + ' table' + (gt.pods.length > 1 ? 's' : '');
           }
           tablesGrid.innerHTML = renderPodsHtml(gt.pods);
         } else {
           if (tablesMeta) tablesMeta.textContent = '';
-          tablesGrid.innerHTML = '<p class="empty" style="grid-column:1/-1;padding:1rem">Tables haven\'t been generated yet for Week ' + data.week + '.</p>';
+          tablesGrid.innerHTML = '<p class="empty" style="grid-column:1/-1;padding:1rem">Tables haven\'t been posted yet for Week ' + data.week + '.</p>';
         }
       }
+
 
       const leaders = sortedPlayers().slice(0, 5);
       let html = '<table><thead><tr><th>#</th><th>Player</th><th>Total</th></tr></thead><tbody>';
@@ -1960,20 +1995,32 @@
 
       const infoEl = document.getElementById('adminShuffleInfo');
       const previewEl = document.getElementById('adminTablesPreview');
+      const pubBtn = document.getElementById('publishTablesBtn');
       const gt = data.generatedTables;
       if (gt && gt.week === data.week && Array.isArray(gt.pods) && gt.pods.length) {
+        if (pubBtn) {
+          pubBtn.textContent = gt.published ? '🙈 Hide Tables from Home' : '📢 Publish Tables to Home';
+          pubBtn.classList.toggle('btn-primary', !gt.published);
+        }
         if (infoEl) {
           const timeStr = gt.updatedAt ? new Date(gt.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
           const repeatNote = typeof gt.backToBackRepeats === 'number'
-            ? ` · ${gt.backToBackRepeats} back-to-back repeat${gt.backToBackRepeats === 1 ? '' : 's'}`
+            ? ' · ' + gt.backToBackRepeats + ' back-to-back repeat' + (gt.backToBackRepeats === 1 ? '' : 's')
             : '';
-          infoEl.textContent = `Showing ${gt.pods.length} pod${gt.pods.length > 1 ? 's' : ''} for Week ${gt.week} (shuffled ${gt.shuffleCount}x${repeatNote}${timeStr ? ' · last at ' + timeStr : ''}) — live on Home page.`;
+          const visLabel = gt.published ? '✅ LIVE on Home page' : '🔒 DRAFT (hidden from Home page)';
+          infoEl.textContent = visLabel + ' — ' + gt.pods.length + ' pod' + (gt.pods.length > 1 ? 's' : '') +
+            ' for Week ' + gt.week + ' (shuffled ' + gt.shuffleCount + 'x' + repeatNote + (timeStr ? ' · last at ' + timeStr : '') + ').';
         }
-        if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods);
-      } else {
-        if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
-        if (previewEl) previewEl.innerHTML = '';
-      }
+     if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods);
+   } else {
+     if (pubBtn) {
+       pubBtn.textContent = '📢 Publish Tables to Home';
+       pubBtn.classList.remove('btn-primary');
+     }
+     if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
+     if (previewEl) previewEl.innerHTML = '';
+   }
+
 
       const chartEl = document.getElementById('adminAttendanceChart');
       if (chartEl) {
