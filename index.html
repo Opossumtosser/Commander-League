@@ -1032,7 +1032,16 @@
       }
       if (!d.podHistory || typeof d.podHistory !== 'object') {
         d.podHistory = {};
+      } else {
+        for (const [wkStr, pods] of Object.entries(d.podHistory)) {
+          if (Array.isArray(pods)) {
+            d.podHistory[wkStr] = pods.map(item =>
+              Array.isArray(item) ? { players: item } : item
+            );
+          }
+        }
       }
+
       if (!d.generatedTables || typeof d.generatedTables !== 'object') {
         d.generatedTables = { week: null, shuffleCount: 0, backToBackRepeats: 0, published: false, updatedAt: null, pods: [] };
       }
@@ -1058,21 +1067,22 @@
         delete p.points;
       }
     }
-     function showSection(id) {
-       const target = document.getElementById(id);
-       if (!target) {
-         console.warn('Section not found:', id);
-         return;
-       }
-       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-       target.classList.add('active');
-       document.querySelectorAll('nav button').forEach(b => {
-         b.classList.toggle('active', b.dataset.section === id);
-       });
-       if (id === 'qr') generateQR();
-       if (id === 'admin' && adminUnlocked) renderAdmin();
-       renderAll();
-     }
+    function showSection(id) {
+        const target = document.getElementById(id);
+        if (!target) {
+          console.warn('Missing section in HTML:', id);
+          return;
+        }
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        target.classList.add('active');
+        document.querySelectorAll('nav button').forEach(b => {
+          b.classList.toggle('active', b.dataset.section === id);
+        });
+        if (id === 'qr') generateQR();
+        if (id === 'admin' && adminUnlocked) renderAdmin();
+        renderAll();
+      }
+
 
 
     function ensureWeekly(p) {
@@ -1411,8 +1421,9 @@
       for (const [wkStr, pods] of Object.entries(data.podHistory)) {
         const wk = parseInt(wkStr);
         if (wk === currentWeek || !Array.isArray(pods)) continue;
-        pods.forEach(podPlayers => {
-          if (!Array.isArray(podPlayers)) return;
+        pods.forEach(item => {
+          const podPlayers = Array.isArray(item) ? item : (item && Array.isArray(item.players) ? item.players : null);
+          if (!podPlayers) return;
           for (let i = 0; i < podPlayers.length; i++) {
             for (let j = i + 1; j < podPlayers.length; j++) {
               const key = [podPlayers[i].toLowerCase(), podPlayers[j].toLowerCase()].sort().join('||');
@@ -1424,6 +1435,7 @@
       }
       return { recentPairs, seasonPairCounts };
     }
+
 
     function splitPoolIntoPods(shuffledPool) {
       const total = shuffledPool.length;
@@ -1495,7 +1507,9 @@
       const chosen = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
 
       if (!data.podHistory) data.podHistory = {};
-      data.podHistory[data.week] = chosen.pods.map(function(p) { return [...p.players]; });
+      data.podHistory[data.week] = chosen.pods.map(function(p) { return { players: [...p.players] }; });
+
+
 
       const isSameWeek = data.generatedTables && data.generatedTables.week === data.week;
       const prevCount = isSameWeek ? (data.generatedTables.shuffleCount || 0) : 0;
