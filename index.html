@@ -1239,20 +1239,19 @@
      * then advances to Week 2 the day AFTER games end (day 8), minus postponed weeks.
      */
     function calcWeekFromStartDate(startDateStr) {
-      if (!startDateStr) return Math.min(data.week || 1, NUM_WEEKS);
-      const start = new Date(startDateStr + 'T00:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+	  if (!startDateStr) return Math.min(data.week || 1, NUM_WEEKS);
+	  const start = new Date(startDateStr + 'T00:00:00');
+	  const today = new Date();
+	  today.setHours(0, 0, 0, 0);
       const diffDays = Math.round((today - start) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 7) return 1;
-      const calendarWeek = Math.floor((diffDays - 1) / 7) + 1;
+      if (diffDays < 0) return 1;
+      const calendarWeek = Math.floor(diffDays / 7) + 1;
       const postponedCount = (data.postponedWeeks || []).filter(function(w) {
         return w < calendarWeek;
-      }).length;
+	  }).length;
       const effectiveWeek = calendarWeek - postponedCount;
       return Math.max(1, Math.min(effectiveWeek, NUM_WEEKS));
     }
-
     function applyAutoWeek() {
       if (data.seasonStartDate && !data.autoWeekLock) {
         data.week = calcWeekFromStartDate(data.seasonStartDate);
