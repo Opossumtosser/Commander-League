@@ -3564,10 +3564,9 @@
       updateHeaderAccountUi();
     }
 
-    function printAttendanceSheet() {
+       function printAttendanceSheet() {
       if (!adminUnlocked) return;
 
-      // 1. Build Sorted Standings split by Prize Eligibility
       const rankedPlayers = sortedPlayers();
       const eligiblePlayers = [];
       const ineligiblePlayers = [];
@@ -3586,7 +3585,131 @@
         } else {
           ineligiblePlayers.push(entry);
         }
-      
+      });
+
+      function buildStandingsPrintRow(entry) {
+        const p = entry.player;
+        ensureWeekly(p);
+        let wkCells = '';
+        for (let w = 0; w < NUM_WEEKS; w++) {
+          const val = p.weeklyPoints[w] || 0;
+          const isCh = p.challengeWeek === (w + 1);
+          wkCells += '<td style="text-align:center">' + val + (isCh ? '★' : '') + '</td>';
+        }
+        const wksAttended = getPlayerSeasonAttendanceCount(p.name);
+        return '<tr>' +
+          '<td style="text-align:center"><strong>#' + entry.overallRank + '</strong></td>' +
+          '<td><strong>' + esc(p.name) + '</strong>' +
+            (p.challengeWeek ? ' <span style="font-size:11px">[★W' + p.challengeWeek + ']</span>' : '') +
+            '<span style="font-size:11px;color:#555">' + esc(entry.tbNote) + '</span>' +
+          '</td>' +
+          wkCells +
+          '<td style="text-align:center"><strong>' + playerTotal(p) + '</strong></td>' +
+          '<td style="text-align:center">' + wksAttended + '/' + NUM_WEEKS + '</td>' +
+          '<td>' + esc(entry.status.label.replace(/^[^\w]+/, '')) + '</td>' +
+        '</tr>';
+      }
+
+      const standingsRows = [];
+      if (eligiblePlayers.length) {
+        eligiblePlayers.forEach(function(e) { standingsRows.push(buildStandingsPrintRow(e)); });
+      } else {
+        standingsRows.push('<tr><td colspan="11" style="text-align:center;color:#555">No players currently in the eligible bracket.</td></tr>');
+      }
+
+      standingsRows.push(
+        '<tr><td colspan="11" style="border-top:4px solid #000;border-bottom:3px solid #000;background:#dcdcdc;font-weight:bold;text-align:center;font-size:11px;letter-spacing:0.06em;padding:5px">' +
+        '▲ PRIZE ELIGIBLE STANDINGS ▲ &nbsp;&nbsp;|&nbsp;&nbsp; ▼ INELIGIBLE / BELOW ATTENDANCE THRESHOLD ▼</td></tr>'
+      );
+
+      if (ineligiblePlayers.length) {
+        ineligiblePlayers.forEach(function(e) { standingsRows.push(buildStandingsPrintRow(e)); });
+      } else {
+        standingsRows.push('<tr><td colspan="11" style="text-align:center;color:#555">None</td></tr>');
+      }
+
+      const nameMap = new Map();
+      function registerName(n) {
+        const clean = (n || '').trim();
+        if (!clean) return;
+        const k = clean.toLowerCase();
+        if (!nameMap.has(k)) nameMap.set(k, clean);
+      }
+
+      (data.players || []).forEach(function(p) { registerName(p.name); });
+      Object.values(data.playerProfiles || {}).forEach(function(prof) { registerName(prof.displayName); });
+      for (let w = 1; w <= NUM_WEEKS; w++) {
+        getWeekAttendance(w).forEach(registerName);
+      }
+
+      const sortedNames = [...nameMap.values()].sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+
+      const tonightPool = getWeekAttendance(data.week);
+      const todayStr = new Date().toLocaleDateString();
+
+      const attRows = sortedNames.map(function(name, idx) {
+        let totalWks = 0;
+        let weekCells = '';
+        for (let w = 1; w <= NUM_WEEKS; w++) {
+          const present = isPlayerPresentInWeek(name, w);
+          if (present) totalWks++;
+          weekCells += '<td style="text-align:center">' + (present ? '✓' : '') + '</td>';
+        }
+        const status = getPlayerPrizeStatus(name);
+        return '<tr>' +
+          '<td>' + (idx + 1) + '</td>' +
+          '<td><strong>' + esc(name) + '</strong></td>' +
+          weekCells +
+          '<td style="text-align:center"><strong>' + totalWks + '/' + NUM_WEEKS + '</strong></td>' +
+          '<td>' + esc(status.label.replace(/^[^\w]+/, '')) + '</td>' +
+          '<td style="width:140px"></td>' +
+        '</tr>';
+      });
+
+      for (let b = 0; b < 4; b++) {
+        attRows.push('<tr><td>' + (sortedNames.length + b + 1) + '</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
+      }
+
+      const printWin = window.open('', '_blank', 'width=960,height=780');
+      if (!printWin) {
+        return alert('Please allow pop-ups in your browser to open the printable attendance sheet.');
+      }
+
+      const docLines = [
+        '<!DOCTYPE html><html><head><title>Standings & Attendance - ' + esc(data.leagueTitle || 'Commander League') + '</title>',
+        '<style>',
+        'body { font-family: Arial, sans-serif; color: #111; margin: 20px; }',
+        'h1 { font-size: 20px; margin: 0 0 4px; }',
+        'h2 { font-size: 15px; margin: 18px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }',
+        '.meta { font-size: 12px; color: #444; margin-bottom: 12px; }',
+        '.tonight-box { border: 1px solid #888; padding: 7px 10px; margin-bottom: 12px; font-size: 12px; background: #f8f8f8; }',
+        'table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }',
+        'th, td { border: 1px solid #333; padding: 5px 7px; height: 22px; }',
+        'th { background: #eaeaea; text-transform: uppercase; font-size: 10px; }',
+        '@media print { button { display: none; } body { margin: 8px; } }',
+        '</style></head><body>',
+        '<div style="display:flex;justify-content:space-between;align-items:center">',
+        '<div><h1>' + esc(data.leagueTitle || 'C&L Commander League') + ' — Standings &amp; Attendance</h1>',
+        '<div class="meta">' + esc(data.season) + ' · Active Week: Week ' + data.week + ' · Printed: ' + todayStr + ' · Prize Rule: 3+ Weeks + Week 6</div></div>',
+        '<button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer">🖨️ Print Now</button>',
+        '</div>',
+        '<h2>1. League Standings (By Eligibility &amp; Points)</h2>',
+        '<table><thead><tr><th style="width:42px">Rank</th><th>Player</th><th style="width:34px">W1</th><th style="width:34px">W2</th><th style="width:34px">W3</th><th style="width:34px">W4</th><th style="width:34px">W5</th><th style="width:34px">W6</th><th style="width:52px">Total</th><th style="width:58px">Weeks</th><th style="width:150px">Eligibility Status</th></tr></thead>',
+        '<tbody>' + standingsRows.join('') + '</tbody></table>',
+        '<h2>2. Season Attendance &amp; Walk-In Sign-In Sheet</h2>',
+        '<div class="tonight-box"><strong>Checked In for Week ' + data.week + ' (' + tonightPool.length + '):</strong> ' + (tonightPool.length ? tonightPool.map(esc).join(', ') : 'None yet') + '</div>',
+        '<table><thead><tr><th style="width:30px">#</th><th>Player Name</th><th style="width:34px">W1</th><th style="width:34px">W2</th><th style="width:34px">W3</th><th style="width:34px">W4</th><th style="width:34px">W5</th><th style="width:34px">W6</th><th style="width:52px">Total</th><th style="width:150px">Prize Eligibility</th><th>Notes / Initials</th></tr></thead>',
+        '<tbody>' + attRows.join('') + '</tbody></table>',
+        '</body></html>'
+      ];
+
+      printWin.document.write(docLines.join(''));
+      printWin.document.close();
+      printWin.focus();
+    }
+
     function printTonightCheckedInList() {
       if (!adminUnlocked) return;
 
@@ -3630,173 +3753,13 @@
         '<button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer">🖨️ Print Now</button>',
         '</div>',
         '<table><thead><tr><th style="width:40px;text-align:center">#</th><th>Player Name</th><th style="width:160px">Table / Notes</th></tr></thead>',
-        '<tbody>' + rows.join('') + '</tbody></table>',
-        '</body></html>'
-      ];
-
-      printWin.document.write(docLines.join(''));
-      printWin.document.close();
-      printWin.focus();
-    }
-
-
-      function buildStandingsPrintRow(entry) {
-        const p = entry.player;
-        ensureWeekly(p);
-        let wkCells = '';
-        for (let w = 0; w < NUM_WEEKS; w++) {
-          const val = p.weeklyPoints[w] || 0;
-          const isCh = p.challengeWeek === (w + 1);
-          wkCells += '<td style="text-align:center">' + val + (isCh ? '★' : '') + '</td>';
-        }
-        const wksAttended = getPlayerSeasonAttendanceCount(p.name);
-        return (
-          '<tr>' +
-            '<td style="text-align:center"><strong>#' + entry.overallRank + '</strong></td>' +
-            '<td><strong>' + esc(p.name) + '</strong>' +
-              (p.challengeWeek ? ' <span style="font-size:11px">[★W' + p.challengeWeek + ']</span>' : '') +
-              '<span style="font-size:11px;color:#555">' + esc(entry.tbNote) + '</span>' +
-            '</td>' +
-            wkCells +
-            '<td style="text-align:center"><strong>' + playerTotal(p) + '</strong></td>' +
-            '<td style="text-align:center">' + wksAttended + '/' + NUM_WEEKS + '</td>' +
-            '<td>' + esc(entry.status.label.replace(/^[^\w]+/, '')) + '</td>' +
-          '</tr>'
-        );
-      }
-
-      let standingsRowsHtml = '';
-      if (eligiblePlayers.length) {
-        standingsRowsHtml += eligiblePlayers.map(buildStandingsPrintRow).join('');
-      } else {
-        standingsRowsHtml += '<tr><td colspan="11" style="text-align:center;color:#555">No players currently in the eligible bracket.</td></tr>';
-      }
-
-      // Bold divider line separating Eligible from Ineligible
-      standingsRowsHtml +=
-        '<tr>' +
-          '<td colspan="11" style="border-top:4px solid #000;border-bottom:3px solid #000;background:#dcdcdc;font-weight:bold;text-align:center;font-size:11px;letter-spacing:0.06em;padding:5px">' +
-            '▲ PRIZE ELIGIBLE STANDINGS ▲ &nbsp;&nbsp;|&nbsp;&nbsp; ▼ INELIGIBLE / BELOW ATTENDANCE THRESHOLD ▼' +
-          '</td>' +
-        '</tr>';
-
-      if (ineligiblePlayers.length) {
-        standingsRowsHtml += ineligiblePlayers.map(buildStandingsPrintRow).join('');
-      } else {
-        standingsRowsHtml += '<tr><td colspan="11" style="text-align:center;color:#555">None</td></tr>';
-      }
-
-      // 2. Gather every participant for the Alphabetical Attendance Sheet
-      const nameMap = new Map();
-      function registerName(n) {
-        const clean = (n || '').trim();
-        if (!clean) return;
-        const k = clean.toLowerCase();
-        if (!nameMap.has(k)) nameMap.set(k, clean);
-      }
-
-      (data.players || []).forEach(function(p) { registerName(p.name); });
-      Object.values(data.playerProfiles || {}).forEach(function(prof) { registerName(prof.displayName); });
-      for (let w = 1; w <= NUM_WEEKS; w++) {
-        getWeekAttendance(w).forEach(registerName);
-      }
-
-      const sortedNames = [...nameMap.values()].sort(function(a, b) {
-        return a.localeCompare(b);
-      });
-
-      const tonightPool = getWeekAttendance(data.week);
-      const todayStr = new Date().toLocaleDateString();
-
-      let attRowsHtml = '';
-      sortedNames.forEach(function(name, idx) {
-        let totalWks = 0;
-        let weekCells = '';
-        for (let w = 1; w <= NUM_WEEKS; w++) {
-          const present = isPlayerPresentInWeek(name, w);
-          if (present) totalWks++;
-          weekCells += '<td style="text-align:center">' + (present ? '✓' : '') + '</td>';
-        }
-        const status = getPlayerPrizeStatus(name);
-        attRowsHtml +=
-          '<tr>' +
-            '<td>' + (idx + 1) + '</td>' +
-            '<td><strong>' + esc(name) + '</strong></td>' +
-            weekCells +
-            '<td style="text-align:center"><strong>' + totalWks + '/' + NUM_WEEKS + '</strong></td>' +
-            '<td>' + esc(status.label.replace(/^[^\w]+/, '')) + '</td>' +
-            '<td style="width:140px"></td>' +
-          '</tr>';
-      });
-
-      // Add 4 blank walk-in rows at the bottom for paper sign-ins
-      for (let b = 0; b < 4; b++) {
-        attRowsHtml +=
-          '<tr>' +
-            '<td>' + (sortedNames.length + b + 1) + '</td>' +
-            '<td></td>' +
-            '<td></td><td></td><td></td><td></td><td></td><td></td>' +
-            '<td></td><td></td><td></td>' +
-          '</tr>';
-      }
-
-      const printWin = window.open('', '_blank', 'width=960,height=780');
-      if (!printWin) {
-        return alert('Please allow pop-ups in your browser to open the printable attendance sheet.');
-      }
-
-      printWin.document.write(
-        '<!DOCTYPE html><html><head><title>Standings & Attendance - ' + esc(data.leagueTitle || 'Commander League') + '</title>' +
-        '<style>' +
-          'body { font-family: Arial, sans-serif; color: #111; margin: 20px; }' +
-          'h1 { font-size: 20px; margin: 0 0 4px; }' +
-          'h2 { font-size: 15px; margin: 18px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }' +
-          '.meta { font-size: 12px; color: #444; margin-bottom: 12px; }' +
-          '.tonight-box { border: 1px solid #888; padding: 7px 10px; margin-bottom: 12px; font-size: 12px; background: #f8f8f8; }' +
-          'table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }' +
-          'th, td { border: 1px solid #333; padding: 5px 7px; height: 22px; }' +
-          'th { background: #eaeaea; text-transform: uppercase; font-size: 10px; }' +
-          '.page-break { page-break-before: always; }' +
-          '@media print { button { display: none; } body { margin: 8px; } }' +
-        '</style></head><body>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-          '<div>' +
-            '<h1>' + esc(data.leagueTitle || 'C&L Commander League') + ' — Standings &amp; Attendance</h1>' +
-            '<div class="meta">' + esc(data.season) + ' · Active Week: Week ' + data.week + ' · Printed: ' + todayStr + ' · Prize Rule: 3+ Weeks + Week 6</div>' +
-          '</div>' +
-          '<button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer">🖨️ Print Now</button>' +
-        '</div>' +
-
-        '<h2>1. League Standings (By Eligibility &amp; Points)</h2>' +
-        '<table><thead><tr>' +
-          '<th style="width:42px">Rank</th>' +
-          '<th>Player</th>' +
-          '<th style="width:34px">W1</th><th style="width:34px">W2</th><th style="width:34px">W3</th>' +
-          '<th style="width:34px">W4</th><th style="width:34px">W5</th><th style="width:34px">W6</th>' +
-          '<th style="width:52px">Total</th>' +
-          '<th style="width:58px">Weeks</th>' +
-          '<th style="width:150px">Eligibility Status</th>' +
-        '</tr></thead><tbody>' + standingsRowsHtml + '</tbody></table>' +
-
-        '<h2>2. Season Attendance &amp; Walk-In Sign-In Sheet</h2>' +
-        '<div class="tonight-box"><strong>Checked In for Week ' + data.week + ' (' + tonightPool.length + '):</strong> ' +
-          (tonightPool.length ? tonightPool.map(esc).join(', ') : 'None yet') +
-        '</div>' +
-        '<table><thead><tr>' +
-          '<th style="width:30px">#</th>' +
-          '<th>Player Name</th>' +
-          '<th style="width:34px">W1</th><th style="width:34px">W2</th><th style="width:34px">W3</th>' +
-          '<th style="width:34px">W4</th><th style="width:34px">W5</th><th style="width:34px">W6</th>' +
-          '<th style="width:52px">Total</th>' +
-          '<th style="width:150px">Prize Eligibility</th>' +
-          '<th>Notes / Initials</th>' +
-        '</tr></thead><tbody>' + attRowsHtml + '</tbody></table>' +
-        '</body></html>'
-      );
-      printWin.document.close();
-      printWin.focus();
-    }
-
+		'' + rows.join('') + '',
+		''
+		];
+		printWin.document.write(docLines.join(''));
+		printWin.document.close();
+		printWin.focus();
+		}
  function updateHeaderAccountUi() {
    const btn = document.getElementById('headerAccountBtn');
    if (!btn) return;
