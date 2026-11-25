@@ -339,16 +339,48 @@
       <nav>
         <button data-section="home" class="active" onclick="showSection('home')">Home</button>
         <button data-section="standings" onclick="showSection('standings')">Standings</button>
-		<button data-section="decks" onclick="showSection('decks')">Decks</button>
+        <button data-section="rules" onclick="showSection('rules')">Rules</button>
+        <button data-section="decks" onclick="showSection('decks')">Decks</button>
         <button data-section="news" onclick="showSection('news')">News</button>
         <button data-section="board" onclick="showSection('board')">Message Board</button>
         <button data-section="docs" onclick="showSection('docs')">Documents</button>
         <button data-section="vote" onclick="showSection('vote')">Vote</button>
         <button data-section="qr" onclick="showSection('qr')">QR Code</button>
         <button data-section="admin" onclick="showSection('admin')">Admin</button>
+        <button id="headerAccountBtn" class="btn-sm" style="border-color:var(--accent);color:var(--accent)" onclick="openWelcomeGate()">Sign In</button>
       </nav>
+
     </div>
   </header>
+  <!-- WELCOME SIGN-IN / GUEST GATE -->
+  <div id="welcomeOverlay" style="position:fixed;inset:0;background:rgba(10,10,16,0.92);z-index:2000;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(6px)">
+    <div class="card" style="max-width:420px;width:100%;margin:0;border-color:var(--accent)">
+      <div style="text-align:center;margin-bottom:0.75rem">
+        <span style="font-size:2.2rem">⚔️</span>
+        <h2 style="margin:0.25rem 0;color:var(--accent)" id="welcomeLeagueTitle">C&amp;L Commander League</h2>
+        <p class="muted" id="welcomeWeekLabel">Sign in to access your Deck Vault or check in for tonight's games.</p>
+      </div>
+      <div class="form-group">
+        <label>Player Name</label>
+        <input type="text" id="welcomeLoginName" list="knownPlayersList" placeholder="Enter or select your name" maxlength="40">
+      </div>
+      <div class="form-group">
+        <label>4-Digit PIN (creates your profile on first sign-in)</label>
+        <input type="password" id="welcomeLoginPin" placeholder="4–8 digit PIN" maxlength="8">
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:0.5rem;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="welcomeAlsoCheckIn" checked style="width:auto">
+          Also check me in for tonight's active week
+        </label>
+      </div>
+      <p class="muted" id="welcomeAuthMsg" style="color:var(--danger);margin-bottom:0.65rem"></p>
+      <div class="flex" style="flex-direction:column;gap:0.5rem">
+        <button class="btn btn-primary" style="width:100%;padding:0.65rem" onclick="welcomeSignInSubmit()">Sign In</button>
+        <button class="btn" style="width:100%" onclick="enterAsGuest()">Browse as Guest</button>
+      </div>
+    </div>
+  </div>
 
   <main class="container">
     <!-- HOME -->
@@ -431,6 +463,15 @@
         <div id="fullStandings"></div>
       </div>
     </section>
+    <!-- FULL RULES TAB -->
+    <section id="rules" class="section">
+      <h1>League Rules</h1>
+      <p class="muted">Official house rules, point structure, and prize eligibility guidelines.</p>
+      <div class="card">
+        <div id="fullRulesViewer" style="white-space:pre-wrap;line-height:1.65"></div>
+      </div>
+    </section>
+ 
     <!-- DECKS & POWER ANALYZER -->
     <section id="decks" class="section">
       <h1>Commander Decks &amp; Power Analyzer</h1>
@@ -632,6 +673,15 @@
           <button class="btn btn-primary" onclick="saveMeta()">Save Meta</button>
           <button class="btn mt-1" onclick="recalcWeekFromDate()">Recalculate Week from Start Date</button>
         </div>
+		<div class="card">
+          <h2>📜 Full League Rules Page</h2>
+          <p class="muted">Everything entered here displays in full on the dedicated Rules tab.</p>
+          <div class="form-group">
+            <textarea id="adminFullRulesText" rows="10" placeholder="Enter your full Commander League rules here..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="saveFullRules()">Save Rules</button>
+        </div>
+
         <!-- ATTENDANCE & TABLE RANDOMIZER -->
         <div class="card">
           <h2>🎲 Attendance &amp; Pod Table Randomizer</h2>
@@ -1054,7 +1104,11 @@
       if (!Array.isArray(d.messages)) d.messages = [];
       if (!d.attendance || typeof d.attendance !== 'object') {
         d.attendance = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      }
+	  if (typeof d.fullRules !== 'string') {
+  d.fullRules = "1. 6-Week League Cycle: Attend at least 3 weeks during the season AND attend Week 6 to be eligible for final prize handouts.\n\n2. Season Challenge: Each player may complete the Season Challenge once per 6-week season.\n\n3. Table Etiquette & House Rules: Check with your pod before playing mass land denial or early infinite combos.";
+}
+
+      
       for (let w = 1; w <= NUM_WEEKS; w++) {
         if (!Array.isArray(d.attendance[w])) d.attendance[w] = [];
       }
@@ -1258,6 +1312,9 @@
       renderBoard();
       renderDocs();
       renderVote();
+	  renderRules();
+      updateHeaderAccountUi();
+
     }
 
     function formatBoardDate(iso) {
@@ -3034,12 +3091,170 @@
         publicGrid.innerHTML = '<p class="empty" style="grid-column:1/-1">No decks registered yet. Sign in above to add yours!</p>';
       }
     }
+ // ========== WELCOME SIGN-IN GATE & AUTO CHECK-IN ==========
+ function openWelcomeGate() {
+   const ov = document.getElementById('welcomeOverlay');
+   if (!ov) return;
+   const titleEl = document.getElementById('welcomeLeagueTitle');
+   const wkEl = document.getElementById('welcomeWeekLabel');
+   if (titleEl) titleEl.textContent = data.leagueTitle || 'C&L Commander League';
+   if (wkEl) wkEl.textContent = 'Week ' + data.week + ' · Sign in to check in for tonight\'s games & access your Deck Vault.';
+   try {
+     const remembered = localStorage.getItem('mtgLeagueCheckinName');
+     const nameInp = document.getElementById('welcomeLoginName');
+     if (remembered && nameInp && !nameInp.value) nameInp.value = remembered;
+   } catch (_) {}
+   ov.classList.remove('hidden');
+ }
+
+ function enterAsGuest() {
+   const ov = document.getElementById('welcomeOverlay');
+   if (ov) ov.classList.add('hidden');
+   try { sessionStorage.setItem('mtgLeagueGateDismissed', 'guest'); } catch (_) {}
+   updateHeaderAccountUi();
+   showSection('home');
+ }
+
+ function welcomeSignInAndCheckIn() {
+   const rawName = (document.getElementById('welcomeLoginName').value || '').trim();
+   const pin = (document.getElementById('welcomeLoginPin').value || '').trim();
+   const msgEl = document.getElementById('welcomeAuthMsg');
+
+   if (!rawName) {
+     msgEl.textContent = 'Please enter your player name.';
+     return;
+   }
+   if (!/^\d{4,8}$/.test(pin)) {
+     msgEl.textContent = 'Please enter a 4–8 digit PIN.';
+     return;
+   }
+
+   if (!data.playerProfiles) data.playerProfiles = {};
+   const key = rawName.toLowerCase();
+   const existing = data.playerProfiles[key];
+
+   if (existing) {
+     if (existing.pin !== pin) {
+       msgEl.textContent = 'Incorrect PIN for ' + existing.displayName + '.';
+       return;
+     }
+     currentDeckUser = key;
+   } else {
+     data.playerProfiles[key] = {
+       displayName: rawName.slice(0, 40),
+       pin: pin,
+       decks: []
+     };
+     currentDeckUser = key;
+   }
+
+   const displayName = data.playerProfiles[key].displayName;
+
+   // Automatically check the signed-in player into tonight's active week
+   const checkRes = addNameToWeekAttendance(displayName, data.week);
+
+   try {
+     localStorage.setItem('mtgLeagueCheckinName', displayName);
+     localStorage.setItem('mtgLeagueSavedUser', key);
+     sessionStorage.setItem('mtgLeagueGateDismissed', key);
+   } catch (_) {}
+
+   document.getElementById('welcomeLoginPin').value = '';
+   msgEl.textContent = '';
+
+   const ov = document.getElementById('welcomeOverlay');
+   if (ov) ov.classList.add('hidden');
+
+   saveData();
+   renderAll();
+   if (adminUnlocked) renderAdmin();
+   showSection('home');
+
+   const homeMsg = document.getElementById('checkinMsg');
+   if (homeMsg) {
+     homeMsg.textContent = checkRes.ok
+       ? 'Welcome back, ' + displayName + '! You are checked in for Week ' + data.week + '.'
+       : 'Welcome back, ' + displayName + '! (Already checked in for Week ' + data.week + ')';
+   }
+ }
+
+ function updateHeaderAccountUi() {
+   const btn = document.getElementById('headerAccountBtn');
+   if (!btn) return;
+   if (currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
+     btn.textContent = '👤 ' + data.playerProfiles[currentDeckUser].displayName;
+   } else {
+     btn.textContent = 'Sign In';
+   }
+ }
+
+ function initWelcomeGateOnLoad() {
+   let dismissed = null;
+   let savedUser = null;
+   try {
+     dismissed = sessionStorage.getItem('mtgLeagueGateDismissed');
+     savedUser = localStorage.getItem('mtgLeagueSavedUser');
+   } catch (_) {}
+
+   if (savedUser && data.playerProfiles && data.playerProfiles[savedUser]) {
+     currentDeckUser = savedUser;
+   }
+
+   const ov = document.getElementById('welcomeOverlay');
+   if (!ov) return;
+
+   if (dismissed) {
+     ov.classList.add('hidden');
+   } else {
+     openWelcomeGate();
+   }
+   updateHeaderAccountUi();
+ }
+
+ // ========== FULL RULES TAB ==========
+ function renderRules() {
+   const viewer = document.getElementById('fullRulesViewer');
+   if (!viewer) return;
+
+   let html = '<div style="margin-bottom:1rem">' + esc(data.fullRules || 'No rules posted yet.') + '</div>';
+
+   // Also embed any uploaded Rules document/image automatically
+   const rulesDocs = (data.documents || []).filter(function(d) {
+     return /rule/i.test(d.title || '');
+   });
+   rulesDocs.forEach(function(d) {
+     const src = getDocImageSrc(d);
+     if (isImageDoc(d) && src) {
+       html += '<div style="margin-top:1rem"><img src="' + src + '" alt="' + esc(d.title) + '" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"></div>';
+     } else if (d.dataUrl && d.dataUrl.startsWith('data:application/pdf')) {
+       html += '<div style="margin-top:1rem"><iframe src="' + d.dataUrl + '" style="width:100%;height:650px;border:1px solid var(--border);border-radius:8px"></iframe></div>';
+     } else if (d.url && d.url !== '#') {
+       html += '<div class="mt-1"><a class="btn btn-sm" href="' + esc(d.url) + '" target="_blank" rel="noopener">Open ' + esc(d.title) + ' ↗</a></div>';
+     }
+   });
+
+   viewer.innerHTML = html;
+ }
+
+ function saveFullRules() {
+   if (!adminUnlocked) return;
+   const box = document.getElementById('adminFullRulesText');
+   if (!box) return;
+   data.fullRules = box.value;
+   saveData();
+   renderRules();
+   alert('League Rules saved!');
+ }
 
 
-    // Init
-    loadData();
-    renderAll();
-    initFirebase();
+   
+     // Init
+	 loadData();
+	 renderAll();
+	 initFirebase();
+	 initWelcomeGateOnLoad();
+
+		
   </script>
 </body>
 </html>
