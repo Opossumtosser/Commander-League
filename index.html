@@ -617,6 +617,14 @@
     <!-- ADMIN -->
     <section id="admin" class="section">
       <h1>Admin Panel</h1>
+	  <h3 class="mt-2">Season Attendance Chart (W1–W6)</h3>
+          <div id="adminAttendanceChart" style="overflow-x:auto"></div>
+          <div class="flex mt-1">
+            <button class="btn btn-primary" onclick="printAttendanceSheet()">🖨️ Print Attendance Sheet</button>
+            <button class="btn btn-sm btn-danger" onclick="clearWeekAttendance()">Clear Current Week Check-Ins</button>
+            <button class="btn btn-sm btn-danger" onclick="clearWeekPodHistory()">Clear Current Week Pod History</button>
+          </div>
+
       <div id="adminGate" class="card">
         <p class="muted">Enter admin password to edit league data.</p>
         <div class="form-group">
@@ -1408,6 +1416,11 @@
       }
       dl.innerHTML = [...names].sort((a, b) => a.localeCompare(b))
         .map(n => `<option value="${esc(n)}">`).join('');
+		    // Inside updateKnownPlayersDatalist() and renderAdminAttendanceAndTables():
+      Object.values(data.playerProfiles || {}).forEach(function(prof) {
+      if (prof && prof.displayName) names.add(prof.displayName.trim());
+    });
+
     }
 
     function addNameToWeekAttendance(rawName, w = data.week) {
@@ -2289,6 +2302,11 @@
      }
      if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
      if (previewEl) previewEl.innerHTML = '';
+	     // Inside updateKnownPlayersDatalist() and renderAdminAttendanceAndTables():
+     Object.values(data.playerProfiles || {}).forEach(function(prof) {
+      if (prof && prof.displayName) names.add(prof.displayName.trim());
+    });
+
    }
 
 
@@ -3115,68 +3133,175 @@
    showSection('home');
  }
 
- function welcomeSignInAndCheckIn() {
-   const rawName = (document.getElementById('welcomeLoginName').value || '').trim();
-   const pin = (document.getElementById('welcomeLoginPin').value || '').trim();
-   const msgEl = document.getElementById('welcomeAuthMsg');
+ function welcomeSignInSubmit() {
+      const rawName = (document.getElementById('welcomeLoginName').value || '').trim();
+      const pin = (document.getElementById('welcomeLoginPin').value || '').trim();
+      const alsoCheckIn = !!(document.getElementById('welcomeAlsoCheckIn') && document.getElementById('welcomeAlsoCheckIn').checked);
+      const msgEl = document.getElementById('welcomeAuthMsg');
 
-   if (!rawName) {
-     msgEl.textContent = 'Please enter your player name.';
-     return;
-   }
-   if (!/^\d{4,8}$/.test(pin)) {
-     msgEl.textContent = 'Please enter a 4–8 digit PIN.';
-     return;
-   }
+      if (!rawName) {
+        msgEl.textContent = 'Please enter your player name.';
+        return;
+      }
+      if (!/^\d{4,8}$/.test(pin)) {
+        msgEl.textContent = 'Please enter a 4–8 digit PIN.';
+        return;
+      }
 
-   if (!data.playerProfiles) data.playerProfiles = {};
-   const key = rawName.toLowerCase();
-   const existing = data.playerProfiles[key];
+      if (!data.playerProfiles) data.playerProfiles = {};
+      const key = rawName.toLowerCase();
+      const existing = data.playerProfiles[key];
 
-   if (existing) {
-     if (existing.pin !== pin) {
-       msgEl.textContent = 'Incorrect PIN for ' + existing.displayName + '.';
-       return;
-     }
-     currentDeckUser = key;
-   } else {
-     data.playerProfiles[key] = {
-       displayName: rawName.slice(0, 40),
-       pin: pin,
-       decks: []
-     };
-     currentDeckUser = key;
-   }
+      if (existing) {
+        if (existing.pin !== pin) {
+          msgEl.textContent = 'Incorrect PIN for ' + existing.displayName + '.';
+          return;
+        }
+        currentDeckUser = key;
+      } else {
+        data.playerProfiles[key] = {
+          displayName: rawName.slice(0, 40),
+          pin: pin,
+          decks: []
+        };
+        currentDeckUser = key;
+      }
 
-   const displayName = data.playerProfiles[key].displayName;
+      const displayName = data.playerProfiles[key].displayName;
+      let checkRes = null;
 
-   // Automatically check the signed-in player into tonight's active week
-   const checkRes = addNameToWeekAttendance(displayName, data.week);
+      if (alsoCheckIn) {
+        checkRes = addNameToWeekAttendance(displayName, data.week);
+      }
 
-   try {
-     localStorage.setItem('mtgLeagueCheckinName', displayName);
-     localStorage.setItem('mtgLeagueSavedUser', key);
-     sessionStorage.setItem('mtgLeagueGateDismissed', key);
-   } catch (_) {}
+      try {
+        localStorage.setItem('mtgLeagueCheckinName', displayName);
+        localStorage.setItem('mtgLeagueSavedUser', key);
+        sessionStorage.setItem('mtgLeagueGateDismissed', key);
+      } catch (_) {}
 
-   document.getElementById('welcomeLoginPin').value = '';
-   msgEl.textContent = '';
+      document.getElementById('welcomeLoginPin').value = '';
+      msgEl.textContent = '';
 
-   const ov = document.getElementById('welcomeOverlay');
-   if (ov) ov.classList.add('hidden');
+      const ov = document.getElementById('welcomeOverlay');
+      if (ov) ov.classList.add('hidden');
 
-   saveData();
-   renderAll();
-   if (adminUnlocked) renderAdmin();
-   showSection('home');
+      saveData();
+      renderAll();
+      if (adminUnlocked) renderAdmin();
+      showSection('home');
 
-   const homeMsg = document.getElementById('checkinMsg');
-   if (homeMsg) {
-     homeMsg.textContent = checkRes.ok
-       ? 'Welcome back, ' + displayName + '! You are checked in for Week ' + data.week + '.'
-       : 'Welcome back, ' + displayName + '! (Already checked in for Week ' + data.week + ')';
-   }
- }
+      const homeMsg = document.getElementById('checkinMsg');
+      if (homeMsg) {
+        if (alsoCheckIn && checkRes) {
+          homeMsg.textContent = checkRes.ok
+            ? 'Signed in as ' + displayName + ' & checked in for Week ' + data.week + '!'
+            : 'Signed in as ' + displayName + '! (Already checked in for Week ' + data.week + ')';
+        } else {
+          homeMsg.textContent = 'Signed in as ' + displayName + ' (not checked in for tonight — click Check In above anytime).';
+        }
+      }
+    }
+function printAttendanceSheet() {
+      if (!adminUnlocked) return;
+
+      // Gather every participant from roster, check-ins, and signed-in player profiles
+      const nameMap = new Map();
+      function registerName(n) {
+        const clean = (n || '').trim();
+        if (!clean) return;
+        const k = clean.toLowerCase();
+        if (!nameMap.has(k)) nameMap.set(k, clean);
+      }
+
+      (data.players || []).forEach(function(p) { registerName(p.name); });
+      Object.values(data.playerProfiles || {}).forEach(function(prof) { registerName(prof.displayName); });
+      for (let w = 1; w <= NUM_WEEKS; w++) {
+        getWeekAttendance(w).forEach(registerName);
+      }
+
+      const sortedNames = [...nameMap.values()].sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+
+      const tonightPool = getWeekAttendance(data.week);
+      const todayStr = new Date().toLocaleDateString();
+
+      let rowsHtml = '';
+      sortedNames.forEach(function(name, idx) {
+        let totalWks = 0;
+        let weekCells = '';
+        for (let w = 1; w <= NUM_WEEKS; w++) {
+          const present = getWeekAttendance(w).some(function(n) {
+            return n.toLowerCase() === name.toLowerCase();
+          });
+          if (present) totalWks++;
+          weekCells += '<td style="text-align:center">' + (present ? '✓' : '') + '</td>';
+        }
+        const status = getPlayerPrizeStatus(name);
+        rowsHtml +=
+          '<tr>' +
+            '<td>' + (idx + 1) + '</td>' +
+            '<td><strong>' + esc(name) + '</strong></td>' +
+            weekCells +
+            '<td style="text-align:center"><strong>' + totalWks + '/' + NUM_WEEKS + '</strong></td>' +
+            '<td>' + esc(status.label.replace(/^[^\w]+/, '')) + '</td>' +
+            '<td style="width:140px"></td>' +
+          '</tr>';
+      });
+
+      // Add 4 blank walk-in rows at the bottom for paper sign-ins
+      for (let b = 0; b < 4; b++) {
+        rowsHtml +=
+          '<tr>' +
+            '<td>' + (sortedNames.length + b + 1) + '</td>' +
+            '<td></td>' +
+            '<td></td><td></td><td></td><td></td><td></td><td></td>' +
+            '<td></td><td></td><td></td>' +
+          '</tr>';
+      }
+
+      const printWin = window.open('', '_blank', 'width=900,height=700');
+      if (!printWin) {
+        return alert('Please allow pop-ups in your browser to open the printable attendance sheet.');
+      }
+
+      printWin.document.write(
+        '<!DOCTYPE html><html><head><title>Attendance Sheet - ' + esc(data.leagueTitle || 'Commander League') + '</title>' +
+        '<style>' +
+          'body { font-family: Arial, sans-serif; color: #111; margin: 24px; }' +
+          'h1 { font-size: 20px; margin: 0 0 4px; }' +
+          '.meta { font-size: 13px; color: #444; margin-bottom: 14px; }' +
+          '.tonight-box { border: 1px solid #888; padding: 8px 12px; margin-bottom: 14px; font-size: 13px; background: #f8f8f8; }' +
+          'table { width: 100%; border-collapse: collapse; font-size: 13px; }' +
+          'th, td { border: 1px solid #333; padding: 6px 8px; height: 24px; }' +
+          'th { background: #eaeaea; text-transform: uppercase; font-size: 11px; }' +
+          '@media print { button { display: none; } body { margin: 10px; } }' +
+        '</style></head><body>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div>' +
+            '<h1>' + esc(data.leagueTitle || 'C&L Commander League') + ' — Season Attendance Sheet</h1>' +
+            '<div class="meta">' + esc(data.season) + ' · Active Week: Week ' + data.week + ' · Printed: ' + todayStr + ' · Total Registered Players: ' + sortedNames.length + '</div>' +
+          '</div>' +
+          '<button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer">🖨️ Print Now</button>' +
+        '</div>' +
+        '<div class="tonight-box"><strong>Checked In for Week ' + data.week + ' (' + tonightPool.length + '):</strong> ' +
+          (tonightPool.length ? tonightPool.map(esc).join(', ') : 'None yet') +
+        '</div>' +
+        '<table><thead><tr>' +
+          '<th style="width:32px">#</th>' +
+          '<th>Player Name</th>' +
+          '<th style="width:36px">W1</th><th style="width:36px">W2</th><th style="width:36px">W3</th>' +
+          '<th style="width:36px">W4</th><th style="width:36px">W5</th><th style="width:36px">W6</th>' +
+          '<th style="width:55px">Total</th>' +
+          '<th style="width:150px">Prize Eligibility</th>' +
+          '<th>Notes / Initials</th>' +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+        '</body></html>'
+      );
+      printWin.document.close();
+      printWin.focus();
+    }
 
  function updateHeaderAccountUi() {
    const btn = document.getElementById('headerAccountBtn');
