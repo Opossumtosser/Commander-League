@@ -617,8 +617,7 @@
     <!-- ADMIN -->
     <section id="admin" class="section">
       <h1>Admin Panel</h1>
-	  <h3 class="mt-2">Season Attendance Chart (W1–W6)</h3>
-          <div id="adminAttendanceChart" style="overflow-x:auto"></div>
+	      <div id="adminAttendanceChart" style="overflow-x:auto"></div>
           <div class="flex mt-1">
             <button class="btn btn-primary" onclick="printAttendanceSheet()">🖨️ Print Attendance Sheet</button>
             <button class="btn btn-sm btn-danger" onclick="clearWeekAttendance()">Clear Current Week Check-Ins</button>
@@ -1112,9 +1111,11 @@
       if (!Array.isArray(d.messages)) d.messages = [];
       if (!d.attendance || typeof d.attendance !== 'object') {
         d.attendance = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-	  if (typeof d.fullRules !== 'string') {
-  d.fullRules = "1. 6-Week League Cycle: Attend at least 3 weeks during the season AND attend Week 6 to be eligible for final prize handouts.\n\n2. Season Challenge: Each player may complete the Season Challenge once per 6-week season.\n\n3. Table Etiquette & House Rules: Check with your pod before playing mass land denial or early infinite combos.";
-}
+      }
+      if (typeof d.fullRules !== 'string') {
+        d.fullRules = "1. 6-Week League Cycle: Attend at least 3 weeks during the season AND attend Week 6 to be eligible for final prize handouts.\n\n2. Season Challenge: Each player may complete the Season Challenge once per 6-week season.\n\n3. Table Etiquette & House Rules: Check with your pod before playing mass land denial or early infinite combos.";
+      }
+
 
       
       for (let w = 1; w <= NUM_WEEKS; w++) {
@@ -1316,6 +1317,7 @@
 
       renderHome();
       renderStandings();
+	  renderdecks();
       renderNews();
       renderBoard();
       renderDocs();
@@ -2314,9 +2316,13 @@
       if (chartEl) {
         const allNames = new Set();
         (data.players || []).forEach(p => { if (p.name) allNames.add(p.name.trim()); });
+        Object.values(data.playerProfiles || {}).forEach(function(prof) {
+          if (prof && prof.displayName) allNames.add(prof.displayName.trim());
+        });
         for (let w = 1; w <= NUM_WEEKS; w++) {
           getWeekAttendance(w).forEach(n => allNames.add(n.trim()));
         }
+
         const sortedNames = [...allNames].sort((a, b) => a.localeCompare(b));
         if (!sortedNames.length) {
           chartEl.innerHTML = '<p class="muted">No players or check-ins recorded yet.</p>';
@@ -2386,6 +2392,8 @@
       document.getElementById('adminStartDate').value = data.seasonStartDate || '';
       const endEl = document.getElementById('adminEndDate');
       if (endEl) endEl.value = data.seasonEndDate || '';
+	  const rulesBox = document.getElementById('adminFullRulesText');
+      if (rulesBox) rulesBox.value = data.fullRules || '';
       const lockEl = document.getElementById('adminAutoWeekLock');
       if (lockEl) lockEl.checked = !!data.autoWeekLock;
       const resetEl = document.getElementById('adminAutoResetEnabled');
