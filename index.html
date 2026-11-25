@@ -743,6 +743,11 @@
           </div>
           <button class="btn mt-1" onclick="savePlayers()">Save All Players</button>
         </div>
+        <div class="card">
+          <h2>🔑 Player Profiles &amp; PIN Reset</h2>
+          <p class="muted">Reset a player's 4-digit PIN if they forget it or get locked out of their Deck Vault.</p>
+          <div id="adminProfilesList"></div>
+        </div>
 
         <div class="card">
           <h2>News Posts</h2>
@@ -2250,6 +2255,24 @@
       return null;
     }
 
+        function getSignedInVoterInfo() {
+      if (currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
+        return {
+          key: currentDeckUser.trim().toLowerCase(),
+          displayName: data.playerProfiles[currentDeckUser].displayName || currentDeckUser
+        };
+      }
+      return null;
+    }
+
+    function hasAlreadyVoted() {
+      const voter = getSignedInVoterInfo();
+      if (voter && Array.isArray(data.vote.voters) && data.vote.voters.includes(voter.key)) {
+        return true;
+      }
+      return false;
+    }
+
     function renderVote() {
       document.getElementById('voteDesc').textContent = data.vote.description || 'Vote for the next season theme!';
 
@@ -2257,54 +2280,128 @@
       if (!data.documents.length) {
         gallery.innerHTML = '<div class="doc-gallery-empty">No documents uploaded yet. Add them in Admin → Documents.</div>';
       } else {
-        gallery.innerHTML = data.documents.map(d => {
+        gallery.innerHTML = data.documents.map(function(d) {
           const src = getDocImageSrc(d);
           const isImg = isImageDoc(d);
           let media;
           if (isImg && src) {
-            media = `<img src="${src}" alt="${esc(d.title)}" loading="lazy" onclick="openLightbox('${src.replace(/'/g, "\\'")}')">`;
+            media = '<img src="' + src + '" alt="' + esc(d.title) + '" loading="lazy" onclick="openLightbox(\'' + src.replace(/'/g, "\\'") + '\')">';
           } else if (d.dataUrl) {
-            media = `<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.5rem">📄</div>`;
+            media = '<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.5rem">📄</div>';
           } else {
-            media = `<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.5rem">🔗</div>`;
+            media = '<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.5rem">🔗</div>';
           }
           const captionLink = d.dataUrl
-            ? `<a href="${d.dataUrl}" download="${esc(d.title)}">${esc(d.title)}</a>`
-            : d.url && d.url !== '#'
-              ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>`
+            ? '<a href="' + d.dataUrl + '" download="' + esc(d.title) + '">' + esc(d.title) + '</a>'
+            : (d.url && d.url !== '#')
+              ? '<a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.title) + '</a>'
               : esc(d.title);
-          return `<div class="doc-gallery-item">${media}<div class="doc-caption">${captionLink}</div></div>`;
+          return '<div class="doc-gallery-item">' + media + '<div class="doc-caption">' + captionLink + '</div></div>';
         }).join('');
       }
 
+      const voter = getSignedInVoterInfo();
       const already = hasAlreadyVoted();
-      const total = data.vote.options.reduce((s, o) => s + o.votes, 0) || 1;
+      const total = data.vote.options.reduce(function(s, o) { return s + o.votes; }, 0) || 1;
       const opts = document.getElementById('voteOptions');
-      opts.innerHTML = data.vote.options.map(o => {
+
+      opts.innerHTML = data.vote.options.map(function(o) {
         const pct = Math.round((o.votes / total) * 100);
-        const cursor = already ? 'default' : 'pointer';
-        return `<div class="vote-option" data-id="${o.id}" onclick="selectVote(${o.id})" style="cursor:${cursor}">
-          <span>${esc(o.label)}</span>
-          <div class="vote-bar-wrap"><div class="vote-bar" style="width:${pct}%"></div></div>
-          <span class="vote-count">${o.votes}</span>
-        </div>`;
+        const canClick = voter && !already;
+        const cursor = canClick ? 'pointer' : 'default';
+        return '<div class="vote-option" data-id="' + o.id + '" onclick="selectVote(' + o.id + ')" style="cursor:' + cursor + '">' +
+          '<span>' + esc(o.label) + '</span>' +
+          '<div class="vote-bar-wrap"><div class="vote-bar" style="width:' + pct + '%"></div></div>' +
+          '<span class="vote-count">' + o.votes + '</span>' +
+        '</div>';
       }).join('');
-      if (selectedVoteId && !already) {
-        const el = opts.querySelector(`[data-id="${selectedVoteId}"]`);
+
+      if (selectedVoteId && voter && !already) {
+        const el = opts.querySelector('[data-id="' + selectedVoteId + '"]');
         if (el) el.style.borderColor = 'var(--accent)';
       }
 
       const nameInput = document.getElementById('voterName');
-      const voteBtn = nameInput?.parentElement?.querySelector('button');
-      if (already) {
-        if (nameInput) { nameInput.disabled = true; nameInput.placeholder = 'Already voted'; }
-        if (voteBtn) voteBtn.disabled = true;
-        document.getElementById('voteMsg').textContent = 'You have already cast your vote. Only one vote per person.';
+      const voteBtn = nameInput && nameInput.parentElement ? nameInput.parentElement.querySelector('button') : null;
+      const msgEl = document.getElementById('voteMsg');
+
+      if (!voter) {
+        if (nameInput) nameInput.classList.add('hidden');
+        if (voteBtn) {
+          voteBtn.disabled = false;
+          voteBtn.textContent = 'Sign In to Vote';
+          voteBtn.onclick = function() { openWelcomeGate(); };
+        }
+        if (msgEl) msgEl.textContent = 'Sign in with your player profile to cast your vote (one vote per account).';
+      } else if (already) {
+        if (nameInput) {
+          nameInput.classList.remove('hidden');
+          nameInput.disabled = true;
+          nameInput.value = voter.displayName;
+        }
+        if (voteBtn) {
+          voteBtn.disabled = true;
+          voteBtn.textContent = 'Vote Submitted';
+          voteBtn.onclick = function() { castVote(); };
+        }
+        if (msgEl) msgEl.textContent = 'Signed in as ' + voter.displayName + ' — your vote has been recorded.';
       } else {
-        if (nameInput) { nameInput.disabled = false; nameInput.placeholder = 'Your name (required)'; }
-        if (voteBtn) voteBtn.disabled = false;
+        if (nameInput) {
+          nameInput.classList.remove('hidden');
+          nameInput.disabled = true;
+          nameInput.value = voter.displayName;
+        }
+        if (voteBtn) {
+          voteBtn.disabled = false;
+          voteBtn.textContent = 'Submit Vote as ' + voter.displayName;
+          voteBtn.onclick = function() { castVote(); };
+        }
+        if (msgEl) msgEl.textContent = 'Select a theme above and click Submit Vote.';
       }
     }
+
+    function selectVote(id) {
+      if (!getSignedInVoterInfo() || hasAlreadyVoted()) return;
+      selectedVoteId = id;
+      renderVote();
+    }
+
+    function castVote() {
+      const voter = getSignedInVoterInfo();
+      const msgEl = document.getElementById('voteMsg');
+      if (!voter) {
+        openWelcomeGate();
+        return;
+      }
+      if (hasAlreadyVoted()) {
+        if (msgEl) msgEl.textContent = 'You have already voted on this account.';
+        return;
+      }
+      if (!selectedVoteId) {
+        if (msgEl) msgEl.textContent = 'Please select a theme option first.';
+        return;
+      }
+
+      const opt = data.vote.options.find(function(o) { return o.id === selectedVoteId; });
+      if (opt) {
+        opt.votes++;
+        if (!Array.isArray(data.vote.voters)) data.vote.voters = [];
+        data.vote.voters.push(voter.key);
+        if (!Array.isArray(data.vote.voterLog)) data.vote.voterLog = [];
+        data.vote.voterLog.push({
+          name: voter.displayName,
+          optionId: opt.id,
+          optionLabel: opt.label,
+          date: new Date().toISOString()
+        });
+        saveData();
+        selectedVoteId = null;
+        if (msgEl) msgEl.textContent = 'Vote recorded for ' + voter.displayName + '!';
+        renderVote();
+        if (adminUnlocked) renderAdmin();
+      }
+    }
+
 
     function openLightbox(src) {
       let lb = document.getElementById('docLightbox');
@@ -2326,53 +2423,7 @@
       renderVote();
     }
 
-    function hasAlreadyVoted() {
-      const local = localStorage.getItem('mtgLeagueMyVote');
-      if (local) return true;
-      const name = (document.getElementById('voterName')?.value || '').trim().toLowerCase();
-      if (name && data.vote.voters.includes(name)) return true;
-      return false;
-    }
-
-    function castVote() {
-      if (hasAlreadyVoted()) {
-        document.getElementById('voteMsg').textContent = 'You have already voted. Only one vote per person.';
-        return;
-      }
-      if (!selectedVoteId) {
-        document.getElementById('voteMsg').textContent = 'Please select an option first.';
-        return;
-      }
-      const rawName = (document.getElementById('voterName').value || '').trim();
-      const normName = rawName.toLowerCase();
-      if (!normName) {
-        document.getElementById('voteMsg').textContent = 'Please enter your name — required for one vote per person.';
-        return;
-      }
-      if (data.vote.voters.includes(normName)) {
-        document.getElementById('voteMsg').textContent = 'That name has already voted.';
-        return;
-      }
-      const opt = data.vote.options.find(o => o.id === selectedVoteId);
-      if (opt) {
-        opt.votes++;
-        data.vote.voters.push(normName);
-        if (!Array.isArray(data.vote.voterLog)) data.vote.voterLog = [];
-        data.vote.voterLog.push({
-          name: rawName.slice(0, 40),
-          optionId: opt.id,
-          optionLabel: opt.label,
-          date: new Date().toISOString()
-        });
-        localStorage.setItem('mtgLeagueMyVote', normName);
-        saveData();
-        selectedVoteId = null;
-        document.getElementById('voterName').value = '';
-        document.getElementById('voteMsg').textContent = 'Vote recorded! Thanks — you cannot vote again.';
-        renderVote();
-        if (adminUnlocked) renderAdmin();
-      }
-    }
+    
 
     function generateQR() {
       const url = window.location.href.split('#').at(0);
@@ -2525,6 +2576,70 @@
           <span class="news-date">${when}</span>
         </div>`;
       }).join('');
+    }
+    function renderAdminProfiles() {
+      const container = document.getElementById('adminProfilesList');
+      if (!container) return;
+
+      const entries = Object.entries(data.playerProfiles || {});
+      if (!entries.length) {
+        container.innerHTML = '<p class="muted">No player accounts registered yet.</p>';
+        return;
+      }
+
+      entries.sort(function(a, b) {
+        return (a.at(1).displayName || '').localeCompare(b.at(1).displayName || '');
+      });
+
+      container.innerHTML = entries.map(function(entry) {
+        const key = entry.at(0);
+        const prof = entry.at(1);
+        const deckCount = Array.isArray(prof.decks) ? prof.decks.length : 0;
+        const safeKey = key.replace(/'/g, "\\'");
+        return (
+          '<div class="voter-log-row">' +
+            '<span>' +
+              '<strong>' + esc(prof.displayName) + '</strong> ' +
+              '<span class="badge">PIN: ' + esc(prof.pin || '—') + '</span> ' +
+              '<span class="muted" style="font-size:0.8rem">(' + deckCount + ' deck' + (deckCount === 1 ? '' : 's') + ')</span>' +
+            '</span>' +
+            '<div class="flex">' +
+              '<button class="btn btn-sm" onclick="adminResetPlayerPin(\'' + safeKey + '\')">Change PIN</button>' +
+              '<button class="btn btn-sm btn-danger" onclick="adminDeletePlayerProfile(\'' + safeKey + '\')">Delete</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function adminResetPlayerPin(profileKey) {
+      if (!adminUnlocked) return;
+      const prof = data.playerProfiles && data.playerProfiles[profileKey];
+      if (!prof) return;
+
+      const newPin = prompt('Enter a new 4–8 digit PIN for ' + prof.displayName + ':', prof.pin || '');
+      if (newPin === null) return;
+      const cleanPin = newPin.trim();
+      if (!/^\d{4,8}$/.test(cleanPin)) {
+        return alert('PIN must be 4 to 8 digits.');
+      }
+      prof.pin = cleanPin;
+      saveData();
+      renderAdminProfiles();
+      alert('PIN updated for ' + prof.displayName + '!');
+    }
+
+    function adminDeletePlayerProfile(profileKey) {
+      if (!adminUnlocked) return;
+      const prof = data.playerProfiles && data.playerProfiles[profileKey];
+      if (!prof) return;
+      if (!confirm('Delete account and saved decks for ' + prof.displayName + '?')) return;
+      delete data.playerProfiles[profileKey];
+      if (currentDeckUser === profileKey) currentDeckUser = null;
+      saveData();
+      renderAdminProfiles();
+      renderDecks();
+      updateHeaderAccountUi();
     }
 
     function buildChallengeSelectHtml(player, idx) {
