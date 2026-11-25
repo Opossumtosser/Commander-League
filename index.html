@@ -709,7 +709,9 @@
             <input type="text" id="adminManualCheckinName" list="knownPlayersList" placeholder="Add player manually" style="max-width:210px">
             <button class="btn" onclick="adminAddCheckIn()">+ Add to Tonight</button>
             <button class="btn" onclick="adminAddAllRosterToCheckIn()">+ Add Entire Roster</button>
+			<button class="btn" onclick="printTonightCheckedInList()">🖨️ Print Tonight's List</button>
           </div>
+          
 
           <div class="flex mt-2">
             <button class="btn btn-primary" onclick="generateRandomTables()">🔀 Shuffle &amp; Generate Tables (3–4/pod)</button>
@@ -3585,6 +3587,72 @@
           ineligiblePlayers.push(entry);
         }
       });
+    function printTonightCheckedInList() {
+      if (!adminUnlocked) return;
+
+      const checkedIn = [...getWeekAttendance(data.week)].sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+
+      if (!checkedIn.length) {
+        return alert('No players are checked in for Week ' + data.week + ' yet.');
+      }
+
+      const todayStr = new Date().toLocaleDateString();
+
+      let rowsHtml = checkedIn.map(function(name, idx) {
+        return (
+          '<tr>' +
+            '<td style="width:40px;text-align:center">' + (idx + 1) + '</td>' +
+            '<td><strong>' + esc(name) + '</strong></td>' +
+            '<td style="width:160px"></td>' +
+          '</tr>'
+        );
+      }).join('');
+
+      // 3 blank walk-in lines at the bottom
+      for (let b = 0; b < 3; b++) {
+        rowsHtml +=
+          '<tr>' +
+            '<td style="text-align:center">' + (checkedIn.length + b + 1) + '</td>' +
+            '<td></td>' +
+            '<td></td>' +
+          '</tr>';
+      }
+
+      const printWin = window.open('', '_blank', 'width=650,height=750');
+      if (!printWin) {
+        return alert('Please allow pop-ups in your browser to open the printable check-in list.');
+      }
+
+      printWin.document.write(
+        '<!DOCTYPE html><html><head><title>Tonight\'s Check-In List - Week ' + data.week + '</title>' +
+        '<style>' +
+          'body { font-family: Arial, sans-serif; color: #111; margin: 24px; }' +
+          'h1 { font-size: 20px; margin: 0 0 4px; }' +
+          '.meta { font-size: 13px; color: #444; margin-bottom: 14px; }' +
+          'table { width: 100%; border-collapse: collapse; font-size: 15px; }' +
+          'th, td { border: 1px solid #333; padding: 8px 10px; height: 28px; }' +
+          'th { background: #eaeaea; text-transform: uppercase; font-size: 12px; text-align: left; }' +
+          '@media print { button { display: none; } body { margin: 12px; } }' +
+        '</style></head><body>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div>' +
+            '<h1>' + esc(data.leagueTitle || 'C&L Commander League') + ' — Week ' + data.week + ' Check-In List</h1>' +
+            '<div class="meta">' + esc(data.season) + ' · Date: ' + todayStr + ' · Total Checked In: ' + checkedIn.length + '</div>' +
+          '</div>' +
+          '<button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer">🖨️ Print Now</button>' +
+        '</div>' +
+        '<table><thead><tr>' +
+          '<th style="width:40px;text-align:center">#</th>' +
+          '<th>Player Name</th>' +
+          '<th style="width:160px">Table / Notes</th>' +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+        '</body></html>'
+      );
+      printWin.document.close();
+      printWin.focus();
+    }
 
       function buildStandingsPrintRow(entry) {
         const p = entry.player;
