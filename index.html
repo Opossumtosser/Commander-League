@@ -3339,28 +3339,7 @@ function printAttendanceSheet() {
    }
  }
 
- function initWelcomeGateOnLoad() {
-   let dismissed = null;
-   let savedUser = null;
-   try {
-     dismissed = sessionStorage.getItem('mtgLeagueGateDismissed');
-     savedUser = localStorage.getItem('mtgLeagueSavedUser');
-   } catch (_) {}
 
-   if (savedUser && data.playerProfiles && data.playerProfiles[savedUser]) {
-     currentDeckUser = savedUser;
-   }
-
-   const ov = document.getElementById('welcomeOverlay');
-   if (!ov) return;
-
-   if (dismissed) {
-     ov.classList.add('hidden');
-   } else {
-     openWelcomeGate();
-   }
-   updateHeaderAccountUi();
- }
 
  // ========== FULL RULES TAB ==========
  function renderRules() {
