@@ -2469,10 +2469,7 @@
        pubBtn.textContent = '📢 Publish Tables to Home';
        pubBtn.classList.remove('btn-primary');
      }
-     if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
-     if (previewEl) previewEl.innerHTML = '';
-	     // Inside updateKnownPlayersDatalist() and renderAdminAttendanceAndTables():
-     Object.values(data.playerProfiles || {}).forEach(function(prof) {
+    
       if (prof && prof.displayName) names.add(prof.displayName.trim());
     });
 
