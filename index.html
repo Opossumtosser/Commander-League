@@ -805,6 +805,18 @@
           <p class="muted mt-1">After connecting: click <strong>Push local data to cloud</strong> once, then re-upload this page to GitHub with the config embedded (use the button below) so every visitor connects automatically.</p>
           <button class="btn mt-1" onclick="downloadWithConfig()">Download index.html with cloud config embedded</button>
         </div>
+        <div class="card">
+          <h2>🔔 Message Board Push Notifications</h2>
+          <p class="muted">Get an instant ping on your phone or Discord whenever someone posts on the Message Board. Works with free <strong>ntfy.sh</strong> topics or <strong>Discord</strong> webhook URLs.</p>
+          <div class="form-group">
+            <label>https://discordapp.com/api/webhooks/1575218408176226518/nFcdi7Wa7qM_dEPzTpXOBnbyGMMdDWfJLaXJfH07JolttYbRfv5Md8O4Tcs5gol9A3lv</label>
+            <input type="url" id="adminNotifyWebhook" placeholder="https://ntfy.sh">
+          </div>
+          <div class="flex">
+            <button class="btn btn-primary" onclick="saveNotifyWebhook()">Save Notification URL</button>
+            <button class="btn" onclick="testNotifyWebhook()">Send Test Ping</button>
+          </div>
+        </div>
 
         <div class="card">
           <h2>Data Backup</h2>
@@ -1096,6 +1108,7 @@
     }
     function migrateData(d) {
       if (!d.leagueTitle) d.leagueTitle = DEFAULT_DATA.leagueTitle;
+	  if (typeof d.notifyWebhookUrl !== 'string') d.notifyWebhookUrl = '';
       if (!d.playerProfiles || typeof d.playerProfiles !== 'object') {
         d.playerProfiles = {};
       }
@@ -1389,7 +1402,9 @@
       msgEl.textContent = 'Posted!';
       try { localStorage.setItem('mtgLeagueBoardName', author); } catch (_) {}
       saveData();
+      sendBoardNotification(author, body);
       renderBoard();
+
     }
 
     function deleteBoardMessage(id) {
@@ -1400,6 +1415,54 @@
       renderBoard();
       if (adminUnlocked) renderAdmin();
     }
+ function saveNotifyWebhook() {
+   if (!adminUnlocked) return;
+   const inp = document.getElementById('adminNotifyWebhook');
+   data.notifyWebhookUrl = (inp ? inp.value : '').trim();
+   saveData();
+   alert(data.notifyWebhookUrl ? 'Notification webhook saved!' : 'Notifications disabled.');
+ }
+
+ function sendBoardNotification(author, body) {
+      const url = (data.notifyWebhookUrl || '').trim();
+      if (!url) return;
+
+      const nl = String.fromCharCode(10);
+      const isDiscord = url.indexOf('://discord.com') !== -1 || url.indexOf('://discordapp.com') !== -1;
+
+      if (isDiscord) {
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: '💬 **New Message Board Post** (' + (data.leagueTitle || 'Commander League') + ')' + nl +
+              '**From:** ' + author + nl +
+              '> ' + body
+          })
+        }).catch(function(err) { console.warn('Notification failed:', err); });
+      } else {
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Title': 'New Board Post: ' + author,
+            'Tags': 'speech_balloon'
+          },
+          body: body
+        }).catch(function(err) { console.warn('Notification failed:', err); });
+      }
+    }
+
+
+ function testNotifyWebhook() {
+   if (!adminUnlocked) return;
+   const inp = document.getElementById('adminNotifyWebhook');
+   const url = (inp ? inp.value : '').trim();
+   if (!url) return alert('Paste a webhook URL first.');
+   data.notifyWebhookUrl = url;
+   saveData();
+   sendBoardNotification('League Admin (Test)', 'Notifications are working for ' + (data.leagueTitle || 'C&L Commander League') + '!');
+   alert('Test ping sent! Check your phone or Discord.');
+ }
 
     // ========== CHECK-IN & POD RANDOMIZER WITH AVOIDANCE ==========
     function getWeekAttendance(w = data.week) {
@@ -2399,6 +2462,8 @@
       const resetEl = document.getElementById('adminAutoResetEnabled');
       if (resetEl) resetEl.checked = !!data.autoResetEnabled;
       document.getElementById('voteDescription').value = data.vote.description;
+	  const hookInp = document.getElementById('adminNotifyWebhook');
+      if (hookInp) hookInp.value = data.notifyWebhookUrl || '';
       const cfg = getFirebaseConfig();
       const cfgInput = document.getElementById('firebaseConfigInput');
       if (cfgInput && cfg && !cfgInput.value) {
