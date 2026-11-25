@@ -1225,19 +1225,25 @@
       }
     }
 
-    /** Calendar weeks elapsed minus postponed weeks so holidays pause progression. */
+        /**
+     * Keeps Week 1 active from Start Date through the first game night (days 0–7),
+     * then advances to Week 2 the day AFTER games end (day 8), minus postponed weeks.
+     */
     function calcWeekFromStartDate(startDateStr) {
       if (!startDateStr) return Math.min(data.week || 1, NUM_WEEKS);
       const start = new Date(startDateStr + 'T00:00:00');
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const diffDays = Math.round((today - start) / (1000 * 60 * 60 * 24));
-      if (diffDays < 0) return 1;
-      const calendarWeek = Math.floor(diffDays / 7) + 1;
-      const postponedCount = (data.postponedWeeks || []).filter(w => w < calendarWeek).length;
+      if (diffDays <= 7) return 1;
+      const calendarWeek = Math.floor((diffDays - 1) / 7) + 1;
+      const postponedCount = (data.postponedWeeks || []).filter(function(w) {
+        return w < calendarWeek;
+      }).length;
       const effectiveWeek = calendarWeek - postponedCount;
       return Math.max(1, Math.min(effectiveWeek, NUM_WEEKS));
     }
+
     function applyAutoWeek() {
       if (data.seasonStartDate && !data.autoWeekLock) {
         data.week = calcWeekFromStartDate(data.seasonStartDate);
@@ -2498,54 +2504,54 @@
       }
 
       const pList = document.getElementById('adminPlayers');
-      if (mode === 'total') {
-
-
-        let table = `<table style="font-size:0.9rem"><thead><tr>
-          <th>Player</th><th>Total points</th><th>Challenge</th><th></th></tr></thead><tbody>`;
-        data.players.forEach((p, i) => {
-          ensureWeekly(p);
-          table += `<tr>
-            <td><input type="text" value="${esc(p.name)}" data-i="${i}" class="player-name" style="width:160px;padding:0.35rem"></td>
-            <td><input type="number" value="${playerTotal(p)}" data-i="${i}" class="player-total-pts" style="width:100px;padding:0.35rem"></td>
-            <td>${buildChallengeSelectHtml(p, i)}</td>
-            <td><button class="btn btn-sm btn-danger" onclick="removePlayer(${i})">✕</button></td></tr>`;
-        });
-        table += '</tbody></table>';
-        pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
-      } else {
-        let table = `<table style="font-size:0.85rem;min-width:720px"><thead><tr>
-          <th>Player</th>`;
-        for (let w = 1; w <= NUM_WEEKS; w++) {
-          table += `<th>${weekLabel(w)}</th>`;
-        }
-        table += `<th>Challenge</th><th>Total</th><th></th></tr></thead><tbody>`;
-        data.players.forEach((p, i) => {
-          ensureWeekly(p);
-          table += `<tr>
-            <td><input type="text" value="${esc(p.name)}" data-i="${i}" class="player-name" style="width:110px;padding:0.35rem"></td>`;
-          for (let w = 0; w < NUM_WEEKS; w++) {
-            table += `<td><input type="number" value="${p.weeklyPoints[w] || 0}" data-i="${i}" data-w="${w}" class="player-week-pts" style="width:54px;padding:0.35rem"></td>`;
-          }
-          table += `<td>${buildChallengeSelectHtml(p, i)}</td>
-            <td class="points" id="admin-total-${i}">${playerTotal(p)}</td>
-            <td><button class="btn btn-sm btn-danger" onclick="removePlayer(${i})">✕</button></td></tr>`;
-        });
-        table += '</tbody></table>';
-        pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
-
-        pList.querySelectorAll('.player-week-pts').forEach(inp => {
-          inp.addEventListener('input', () => {
-            const i = +inp.dataset.i;
-            let sum = 0;
-            pList.querySelectorAll(`.player-week-pts[data-i="${i}"]`).forEach(el => {
-              sum += parseInt(el.value) || 0;
-            });
-            const tot = document.getElementById('admin-total-' + i);
-            if (tot) tot.textContent = sum;
+      if (pList) {
+        if (mode === 'total') {
+          let table = '<table style="font-size:0.9rem"><thead><tr>' +
+            '<th>Player</th><th>Total points</th><th>Challenge</th><th></th></tr></thead><tbody>';
+          data.players.forEach(function(p, i) {
+            ensureWeekly(p);
+            table += '<tr>' +
+              '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:160px;padding:0.35rem"></td>' +
+              '<td><input type="number" value="' + playerTotal(p) + '" data-i="' + i + '" class="player-total-pts" style="width:100px;padding:0.35rem"></td>' +
+              '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
+              '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
           });
-        });
+          table += '</tbody></table>';
+          pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
+        } else {
+          let table = '<table style="font-size:0.85rem;min-width:720px"><thead><tr><th>Player</th>';
+          for (let w = 1; w <= NUM_WEEKS; w++) {
+            table += '<th>' + weekLabel(w) + '</th>';
+          }
+          table += '<th>Challenge</th><th>Total</th><th></th></tr></thead><tbody>';
+          data.players.forEach(function(p, i) {
+            ensureWeekly(p);
+            table += '<tr>' +
+              '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:110px;padding:0.35rem"></td>';
+            for (let w = 0; w < NUM_WEEKS; w++) {
+              table += '<td><input type="number" value="' + (p.weeklyPoints[w] || 0) + '" data-i="' + i + '" data-w="' + w + '" class="player-week-pts" style="width:54px;padding:0.35rem"></td>';
+            }
+            table += '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
+              '<td class="points" id="admin-total-' + i + '">' + playerTotal(p) + '</td>' +
+              '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
+          });
+          table += '</tbody></table>';
+          pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
+
+          pList.querySelectorAll('.player-week-pts').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+              const i = +inp.dataset.i;
+              let sum = 0;
+              pList.querySelectorAll('.player-week-pts[data-i="' + i + '"]').forEach(function(el) {
+                sum += parseInt(el.value) || 0;
+              });
+              const tot = document.getElementById('admin-total-' + i);
+              if (tot) tot.textContent = sum;
+            });
+          });
+        }
       }
+
 
       document.getElementById('adminNewsList').innerHTML = data.news.map(n => `
         <div class="flex mt-1" style="justify-content:space-between">
@@ -2836,76 +2842,93 @@
 	   "jokulhaups", "obliterate", "decree of annihilation", "sunder", "vorinclex, voice of hunger"
 	 ]);
 
-	function analyzeDecklistText(rawText) {
-	  const lines = (rawText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-	  const cards = [];
-	  let totalCards = 0;
+  function analyzeDecklistText(rawText) {
+   const lines = (rawText || '').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+   const cards = [];
+   let totalCards = 0;
 
-	  lines.forEach(line => {
-		if (/^(deck|commander|sideboard|maybeboard|about|name)\b/i.test(line)) return;
-		const m = line.match(/^(\d+)x?\s+([^(#\n\r]+)/i);
-		const qty = m ? parseInt(m[1]) : 1;
-		const name = (m ? m[2] : line).replace(/\*[A-Z]+\*/g, '').trim();
-		if (!name) return;
-		cards.push({ qty, name });
-		totalCards += qty;
-	   });
+   lines.forEach(function(line) {
+     if (/^(deck|commander|sideboard|maybeboard|about|name)\b/i.test(line)) return;
+     const m = line.match(/^(\d+)x?\s+([^(#\n\r]+)/i);
+     const qty = m ? parseInt(m.at(1)) : 1;
+     const name = (m ? m.at(2) : line).replace(/\*[A-Z]+\*/g, '').trim();
+     if (!name) return;
+     cards.push({ qty: qty, name: name });
+     totalCards += qty;
+   });
 
-	   const foundGameChangers = [];
-	   const foundTutors = [];
-	   const foundFastMana = [];
-	   const foundMLD = [];
-	   let interactionCount = 0;
+   const foundGameChangers = [];
+   const foundTutors = [];
+   const foundFastMana = [];
+   const foundMLD = [];
+   let interactionCount = 0;
+   let cedhStapleCount = 0;
 
-	   cards.forEach(({ qty, name }) => {
-		 const lower = name.toLowerCase();
-		 if (GAME_CHANGERS_LIST.has(lower)) foundGameChangers.push(name);
-		 if (TUTOR_KEYWORDS.includes(lower) || /\btutor\b/i.test(lower)) foundTutors.push(name);
-		 if (FAST_MANA_LIST.has(lower)) foundFastMana.push(name);
-		 if (MASS_LAND_DENIAL.has(lower)) foundMLD.push(name);
-		 if (/(counterspell|swan song|negate|arcane denial|fierce guardianship|force of will|force of negation|pact of negation|mana drain|dovin's veto|swords to plowshares|path to exile|beast within|generous gift|chaos warp|assassin's trophy|abrupt decay|deadly rollick|cyclonic rift|wrath of god|farewell|toxic deluge|blasphemous act|damnation|austere command)/i.test(lower)) {
-		   interactionCount += qty;
-		 }
-	   });
+   const CEDH_CORE = new Set([
+     "thassa's oracle", "underworld breach", "ad nauseam", "lion's eye diamond",
+     "chrome mox", "mox diamond", "mana vault", "grim monolith", "mystic remora",
+     "rhystic study", "fierce guardianship", "force of will", "deflecting swat",
+     "pact of negation", "flusterstorm", "mental misstep", "silence", "grand abolisher",
+     "imperial seal", "demonic tutor", "vampiric tutor", "tainted pact", "demonic consultation"
+   ]);
 
-	   const gcCount = foundGameChangers.length;
-	   const tutorCount = foundTutors.length;
-	   const fastManaCount = foundFastMana.length;
-	   const mldCount = foundMLD.length;
+   cards.forEach(function(item) {
+     const qty = item.qty;
+     const name = item.name;
+     const lower = name.toLowerCase();
+     if (GAME_CHANGERS_LIST.has(lower)) foundGameChangers.push(name);
+     if (TUTOR_KEYWORDS.includes(lower) || /\btutor\b/i.test(lower)) foundTutors.push(name);
+     if (FAST_MANA_LIST.has(lower)) foundFastMana.push(name);
+     if (MASS_LAND_DENIAL.has(lower)) foundMLD.push(name);
+     if (CEDH_CORE.has(lower)) cedhStapleCount++;
+     if (/(counterspell|swan song|negate|arcane denial|fierce guardianship|force of will|force of negation|pact of negation|mana drain|dovin's veto|swords to plowshares|path to exile|beast within|generous gift|chaos warp|assassin's trophy|abrupt decay|deadly rollick|cyclonic rift|wrath of god|farewell|toxic deluge|blasphemous act|damnation|austere command)/i.test(lower)) {
+       interactionCount += qty;
+     }
+   });
 
-	   // Official Commander Bracket (1–4)
-	   let bracket = 2;
-	   let bracketLabel = 'Bracket 2 · Core';
-	   if (gcCount >= 4 || mldCount >= 1 || (gcCount >= 3 && fastManaCount >= 5)) {
-		 bracket = 4;
-		 bracketLabel = 'Bracket 4 · Optimized';
-	   } else if (gcCount >= 1 || tutorCount >= 4 || fastManaCount >= 4) {
-		 bracket = 3;
-		 bracketLabel = 'Bracket 3 · Upgraded';
-	   } else if (gcCount === 0 && tutorCount === 0 && fastManaCount <= 1) {
-		 bracket = 1;
-		 bracketLabel = 'Bracket 1 · Exhibition';
-	   }
+   const gcCount = foundGameChangers.length;
+   const tutorCount = foundTutors.length;
+   const fastManaCount = foundFastMana.length;
+   const mldCount = foundMLD.length;
 
-	   // 1–10 Power Score
-	   const rawScore = 3.0 + (gcCount * 0.85) + (tutorCount * 0.4) + (fastManaCount * 0.35) + (mldCount * 1.0) + Math.min(interactionCount * 0.12, 1.2);
-	   const power10 = Math.max(1, Math.min(10, Math.round(rawScore * 10) / 10));
+   // Official 5-Bracket Commander System (Brackets 1–5)
+   let bracket = 2;
+   let bracketLabel = 'Bracket 2 · Core';
 
-	   return {
-		 totalCards,
-		 bracket,
-		 bracketLabel,
-		 power10,
-		 gcCount,
-		 tutorCount,
-		 fastManaCount,
-		 interactionCount,
-		 foundGameChangers,
-		 foundTutors,
-		 foundFastMana,
-		 foundMLD
-	   };
-	 }
+   if ((gcCount >= 5 && cedhStapleCount >= 7) || (cedhStapleCount >= 9 && fastManaCount >= 5)) {
+     bracket = 5;
+     bracketLabel = 'Bracket 5 · cEDH';
+   } else if (gcCount >= 4 || mldCount >= 1 || (gcCount >= 3 && fastManaCount >= 5)) {
+     bracket = 4;
+     bracketLabel = 'Bracket 4 · Optimized';
+   } else if (gcCount >= 1 || tutorCount >= 4 || fastManaCount >= 4) {
+     bracket = 3;
+     bracketLabel = 'Bracket 3 · Upgraded';
+   } else if (gcCount === 0 && tutorCount === 0 && fastManaCount <= 1) {
+     bracket = 1;
+     bracketLabel = 'Bracket 1 · Exhibition';
+   }
+
+   // 1–10 Power Score
+   const rawScore = 2.8 + (gcCount * 0.8) + (tutorCount * 0.38) + (fastManaCount * 0.35) + (mldCount * 1.0) + Math.min(interactionCount * 0.12, 1.2);
+   const power10 = Math.max(1, Math.min(10, Math.round(rawScore * 10) / 10));
+
+   return {
+     totalCards: totalCards,
+     bracket: bracket,
+     bracketLabel: bracketLabel,
+     power10: power10,
+     gcCount: gcCount,
+     tutorCount: tutorCount,
+     fastManaCount: fastManaCount,
+     interactionCount: interactionCount,
+     foundGameChangers: foundGameChangers,
+     foundTutors: foundTutors,
+     foundFastMana: foundFastMana,
+     foundMLD: foundMLD
+   };
+ }
+
 
 	function renderPowerWidgetHtml(stats) {
 	   const segsOn = Math.round(stats.power10);
