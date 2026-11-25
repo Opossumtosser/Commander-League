@@ -1556,7 +1556,7 @@
       renderAdmin();
     }
 
-        function movePodToTable(podIndex, newTableNum) {
+    function movePodToTable(podIndex, newTableNum) {
       if (!adminUnlocked) return;
       const gt = data.generatedTables;
       if (!gt || !Array.isArray(gt.pods) || !gt.pods[podIndex]) return;
@@ -1568,58 +1568,107 @@
       const oldNum = currentPod.tableNumber;
       if (oldNum === targetNum) return;
 
-      // If another pod is already assigned to targetNum, swap their table numbers
-      const occupant = gt.pods.find((p, idx) => idx !== podIndex && p.tableNumber === targetNum);
+      const occupant = gt.pods.find(function(p, idx) {
+        return idx !== podIndex && p.tableNumber === targetNum;
+      });
       if (occupant) {
         occupant.tableNumber = oldNum;
       }
       currentPod.tableNumber = targetNum;
 
-      // Keep pods sorted cleanly by physical Table Number
-      gt.pods.sort((a, b) => a.tableNumber - b.tableNumber);
+      gt.pods.sort(function(a, b) { return a.tableNumber - b.tableNumber; });
 
       saveData();
       renderHome();
       renderAdmin();
     }
 
+    function swapPodPlayers(podAIdx, seatAIdx, targetVal) {
+      if (!adminUnlocked || !targetVal) return;
+      const gt = data.generatedTables;
+      if (!gt || !Array.isArray(gt.pods)) return;
 
+      const parts = targetVal.split(':');
+      const podBIdx = parseInt(parts.at(0));
+      const seatBIdx = parseInt(parts.at(1));
+      if (isNaN(podBIdx) || isNaN(seatBIdx)) return;
 
-        function renderPodsHtml(pods, isAdminPreview = false) {
+      const podA = gt.pods[podAIdx];
+      const podB = gt.pods[podBIdx];
+      if (!podA || !podB) return;
+
+      const playerA = podA.players[seatAIdx];
+      const playerB = podB.players[seatBIdx];
+      if (!playerA || !playerB) return;
+
+      podA.players[seatAIdx] = playerB;
+      podB.players[seatBIdx] = playerA;
+
+      // Keep podHistory synced with your manual adjustment for future weeks
+      if (!data.podHistory) data.podHistory = {};
+      data.podHistory[data.week] = gt.pods.map(function(p) {
+        return { players: [...p.players] };
+      });
+
+      saveData();
+      renderHome();
+      renderAdmin();
+    }
+
+    function renderPodsHtml(pods, isAdminPreview = false) {
       const maxTableOptions = Math.max(pods.length, 6);
-      return pods.map((pod, podIdx) => {
-        let headerLeft = `<span class="table-pod-title">Table ${pod.tableNumber}</span>`;
+      return pods.map(function(pod, podIdx) {
+        let headerLeft = '<span class="table-pod-title">Table ' + pod.tableNumber + '</span>';
         if (isAdminPreview) {
           let opts = '';
           for (let t = 1; t <= maxTableOptions; t++) {
-            opts += `<option value="${t}" ${pod.tableNumber === t ? 'selected' : ''}>Table ${t}</option>`;
+            opts += '<option value="' + t + '"' + (pod.tableNumber === t ? ' selected' : '') + '>Table ' + t + '</option>';
           }
-          headerLeft = `
-            <div class="flex" style="gap:0.4rem">
-              <span class="table-pod-title">Table</span>
-              <select aria-label="Select physical table number" onchange="movePodToTable(${podIdx}, this.value)" style="width:auto;padding:0.25rem 0.5rem;font-weight:700;color:var(--accent)">
-                ${opts}
-              </select>
-            </div>
-          `;
+          headerLeft =
+            '<div class="flex" style="gap:0.4rem">' +
+              '<span class="table-pod-title">Table</span>' +
+              '<select aria-label="Select physical table number" onchange="movePodToTable(' + podIdx + ', this.value)" style="width:auto;padding:0.25rem 0.5rem;font-weight:700;color:var(--accent)">' +
+                opts +
+              '</select>' +
+            '</div>';
         }
 
-        return `
-          <div class="table-pod">
-            <div class="table-pod-header">
-              ${headerLeft}
-              <span class="badge">${pod.players.length} Players</span>
-            </div>
-            <ol>
-              ${pod.players.map((player, idx) => `
-                <li><span class="seat-num">${idx + 1}</span><span>${esc(player)}</span></li>
-              `).join('')}
-            </ol>
-          </div>
-        `;
+        const seatsHtml = pod.players.map(function(player, seatIdx) {
+          let swapHtml = '';
+          if (isAdminPreview && pods.length > 1) {
+            let swapOpts = '<option value="">⇄ Swap</option>';
+            pods.forEach(function(otherPod, otherPodIdx) {
+              if (otherPodIdx === podIdx) return;
+              otherPod.players.forEach(function(otherPlayer, otherSeatIdx) {
+                swapOpts += '<option value="' + otherPodIdx + ':' + otherSeatIdx + '">⇄ ' + esc(otherPlayer) + ' (T' + otherPod.tableNumber + ')</option>';
+              });
+            });
+            swapHtml =
+              '<select aria-label="Swap player with another table" onchange="swapPodPlayers(' + podIdx + ', ' + seatIdx + ', this.value)" style="width:auto;max-width:125px;padding:0.18rem 0.35rem;font-size:0.75rem;margin-left:auto">' +
+                swapOpts +
+              '</select>';
+          }
+
+          return (
+            '<li>' +
+              '<span class="seat-num">' + (seatIdx + 1) + '</span>' +
+              '<span>' + esc(player) + '</span>' +
+              swapHtml +
+            '</li>'
+          );
+        }).join('');
+
+        return (
+          '<div class="table-pod">' +
+            '<div class="table-pod-header">' +
+              headerLeft +
+              '<span class="badge">' + pod.players.length + ' Players</span>' +
+            '</div>' +
+            '<ol>' + seatsHtml + '</ol>' +
+          '</div>'
+        );
       }).join('');
     }
-
 
     // ========== PRIZE ELIGIBILITY & TIE-BREAKERS ==========
     function isPlayerPresentInWeek(playerName, w) {
