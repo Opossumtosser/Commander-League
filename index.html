@@ -1488,9 +1488,7 @@
       dl.innerHTML = [...names].sort((a, b) => a.localeCompare(b))
         .map(n => `<option value="${esc(n)}">`).join('');
 		    // Inside updateKnownPlayersDatalist() and renderAdminAttendanceAndTables():
-      Object.values(data.playerProfiles || {}).forEach(function(prof) {
-      if (prof && prof.displayName) names.add(prof.displayName.trim());
-    });
+      
 
     }
 
@@ -2391,6 +2389,7 @@
         for (let w = 1; w <= NUM_WEEKS; w++) {
           getWeekAttendance(w).forEach(n => allNames.add(n.trim()));
         }
+
 
         const sortedNames = [...allNames].sort((a, b) => a.localeCompare(b));
         if (!sortedNames.length) {
