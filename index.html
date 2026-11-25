@@ -1207,16 +1207,7 @@
 
 
 
-    function ensureWeekly(p) {
-      if (!Array.isArray(p.weeklyPoints) || p.weeklyPoints.length !== NUM_WEEKS) {
-        const old = typeof p.points === 'number' ? p.points : 0;
-        p.weeklyPoints = Array(NUM_WEEKS).fill(0);
-        if (old > 0) p.weeklyPoints.splice(0, 1, old);
-
-        delete p.points;
-      }
-    }
-
+    
     function loadData() {
       try {
         const raw = localStorage.getItem('mtgLeague');
@@ -2599,75 +2590,72 @@
 
       const pList = document.getElementById('adminPlayers');
 	  if (pList) {
-	    if (mode === 'total') {
-	      let table = '<table style="font-size:0.9rem"><thead><tr>' +
-	         '<th>Player</th><th>Total points</th><th>Season Wins</th><th>Challenge</th><th></th></tr></thead><tbody>';
-	       data.players.forEach(function(p, i) {
-	         ensureWeekly(p);
-	         table += '<tr>' +
-	           '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:160px;padding:0.35rem"></td>' +
-	           '<td><input type="number" value="' + playerTotal(p) + '" data-i="' + i + '" class="player-total-pts" style="width:95px;padding:0.35rem"></td>' +
-	           '<td><input type="number" min="0" max="6" value="' + playerTotalWins(p) + '" data-i="' + i + '" class="player-total-wins" style="width:75px;padding:0.35rem"></td>' +
-	           '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
-	           '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
-	       });
-	       table += '</tbody></table>';
-	       pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
-	     } else {
-	       let table = '<table style="font-size:0.85rem;min-width:820px"><thead><tr><th>Player</th>';
-	       for (let w = 1; w <= NUM_WEEKS; w++) {
-	         table += '<th>' + weekLabel(w) + ' <span style="font-size:0.7rem;color:var(--text-muted)">(Pts / Win)</span></th>';
-	       }
-	       table += '<th>Challenge</th><th>Wins</th><th>Total</th><th></th></tr></thead><tbody>';
-	       data.players.forEach(function(p, i) {
-	         ensureWeekly(p);
-	         table += '<tr>' +
-	           '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:110px;padding:0.35rem"></td>';
-	         for (let w = 0; w < NUM_WEEKS; w++) {
-	           const checked = p.weeklyWins[w] ? ' checked' : '';
-	           table +=
-	             '<td>' +
-	               '<div style="display:flex;align-items:center;gap:0.25rem">' +
-	                 '<input type="number" value="' + (p.weeklyPoints[w] || 0) + '" data-i="' + i + '" data-w="' + w + '" class="player-week-pts" style="width:48px;padding:0.3rem">' +
-	                 '<label title="Won pod in Week ' + (w + 1) + '" style="display:inline-flex;align-items:center;gap:2px;margin:0;cursor:pointer;font-size:0.75rem;color:var(--accent)">' +
-	                   '<input type="checkbox" data-i="' + i + '" data-w="' + w + '" class="player-week-win" style="width:auto"' + checked + '>W' +
-	                 '</label>' +
-	               '</div>' +
-	             '</td>';
-	         }
-	         table += '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
-	           '<td style="font-weight:700;color:var(--accent)" id="admin-wins-' + i + '">' + playerTotalWins(p) + '</td>' +
-	           '<td class="points" id="admin-total-' + i + '">' + playerTotal(p) + '</td>' +
-	           '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
-	       });
-	       table += '</tbody></table>';
-	       pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
-	
-	       pList.querySelectorAll('.player-week-pts').forEach(function(inp) {
-	         inp.addEventListener('input', function() {
-	           const i = +inp.dataset.i;
-	           let sum = 0;
-	           pList.querySelectorAll('.player-week-pts[data-i="' + i + '"]').forEach(function(el) {
-	             sum += parseInt(el.value) || 0;
-	           });
-	           const tot = document.getElementById('admin-total-' + i);
-	           if (tot) tot.textContent = sum;
-	         });
-	       });
+        if (mode === 'total') {
+          let table = '<table style="font-size:0.9rem"><thead><tr>' +
+            '<th>Player</th><th>Total points</th><th>Wins</th><th>Challenge</th><th></th></tr></thead><tbody>';
+          data.players.forEach(function(p, i) {
+            ensureWeekly(p);
+            table += '<tr>' +
+              '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:160px;padding:0.35rem"></td>' +
+              '<td><input type="number" value="' + playerTotal(p) + '" data-i="' + i + '" class="player-total-pts" style="width:100px;padding:0.35rem"></td>' +
+              '<td><input type="number" min="0" max="6" value="' + playerTotalWins(p) + '" data-i="' + i + '" class="player-total-wins" style="width:75px;padding:0.35rem"></td>' +
+              '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
+              '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
+          });
+          table += '</tbody></table>';
+          pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
+        } else {
+          let table = '<table style="font-size:0.85rem;min-width:780px"><thead><tr><th>Player</th>';
+          for (let w = 1; w <= NUM_WEEKS; w++) {
+            table += '<th>' + weekLabel(w) + '</th>';
+          }
+          table += '<th>Won Weeks</th><th>Challenge</th><th>Total</th><th></th></tr></thead><tbody>';
+          data.players.forEach(function(p, i) {
+            ensureWeekly(p);
+            const winsArr = Array.isArray(p.weeklyWins) ? p.weeklyWins : Array(NUM_WEEKS).fill(false);
 
-       pList.querySelectorAll('.player-week-win').forEach(function(chk) {
-         chk.addEventListener('change', function() {
-           const i = +chk.dataset.i;
-           let wins = 0;
-           pList.querySelectorAll('.player-week-win[data-i="' + i + '"]').forEach(function(el) {
-             if (el.checked) wins++;
-           });
-           const winCell = document.getElementById('admin-wins-' + i);
-           if (winCell) winCell.textContent = wins;
-         });
-       });
-     }
-   }
+            table += '<tr>' +
+              '<td><input type="text" value="' + esc(p.name) + '" data-i="' + i + '" class="player-name" style="width:110px;padding:0.35rem"></td>';
+
+            // Original clean W1-W6 points boxes
+            for (let w = 0; w < NUM_WEEKS; w++) {
+              table += '<td><input type="number" value="' + (p.weeklyPoints[w] || 0) + '" data-i="' + i + '" data-w="' + w + '" class="player-week-pts" style="width:54px;padding:0.35rem"></td>';
+            }
+
+            // Separate compact W1-W6 win checkboxes
+            let winBoxes = '<div style="display:flex;gap:0.35rem;flex-wrap:nowrap">';
+            for (let w = 0; w < NUM_WEEKS; w++) {
+              const checked = winsArr[w] ? ' checked' : '';
+              winBoxes +=
+                '<label title="Won in Week ' + (w + 1) + '" style="display:inline-flex;flex-direction:column;align-items:center;margin:0;cursor:pointer;font-size:0.68rem;color:var(--text-muted)">' +
+                  '<span>W' + (w + 1) + '</span>' +
+                  '<input type="checkbox" data-i="' + i + '" data-w="' + w + '" class="player-week-win" style="width:auto"' + checked + '>' +
+                '</label>';
+            }
+            winBoxes += '</div>';
+
+            table +=
+              '<td>' + winBoxes + '</td>' +
+              '<td>' + buildChallengeSelectHtml(p, i) + '</td>' +
+              '<td class="points" id="admin-total-' + i + '">' + playerTotal(p) + '</td>' +
+              '<td><button class="btn btn-sm btn-danger" onclick="removePlayer(' + i + ')">✕</button></td></tr>';
+          });
+          table += '</tbody></table>';
+          pList.innerHTML = data.players.length ? table : '<p class="muted">No players yet</p>';
+
+          pList.querySelectorAll('.player-week-pts').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+              const i = +inp.dataset.i;
+              let sum = 0;
+              pList.querySelectorAll('.player-week-pts[data-i="' + i + '"]').forEach(function(el) {
+                sum += parseInt(el.value) || 0;
+              });
+              const tot = document.getElementById('admin-total-' + i);
+              if (tot) tot.textContent = sum;
+            });
+          });
+        }
+      }
 
 
 
