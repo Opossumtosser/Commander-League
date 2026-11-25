@@ -2675,9 +2675,9 @@
         cfgInput.value = JSON.stringify(cfg, null, 2);
       }
       updateCloudStatus();
-
       renderAdminAttendanceAndTables();
       renderAdminVoterLog();
+	  renderAdminProfiles();
 
       const postWrap = document.getElementById('adminPostponeWeeks');
       if (postWrap) {
