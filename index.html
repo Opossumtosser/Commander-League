@@ -376,6 +376,7 @@
         <p class="muted mt-1" id="checkinMsg"></p>
         <div id="checkedInList" class="flex mt-1"></div>
       </div>
+
       <!-- TONIGHT'S PODS / TABLES -->
       <div class="card" id="homeTablesCard">
         <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
@@ -385,97 +386,50 @@
         <div id="homeTablesGrid" class="tables-grid"></div>
       </div>
 
+      <!-- POINTS LEADERS -->
       <div class="card">
-        <h2>🏆 Points Leaders</h2>
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0">🏆 Points Leaders</h2>
+          <button class="btn btn-sm" onclick="showSection('standings')">Full Standings →</button>
+        </div>
         <div id="homeLeaders"></div>
       </div>
+
+      <!-- LATEST NEWS PREVIEW -->
       <div class="card">
-        <h2>📢 Latest News</h2>
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0">📢 Latest News</h2>
+          <button class="btn btn-sm" onclick="showSection('news')">All News →</button>
+        </div>
         <div id="homeNews"></div>
+      </div>
+
+      <!-- RECENT MESSAGE BOARD PREVIEW -->
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0">💬 Recent Messages</h2>
+          <button class="btn btn-sm" onclick="showSection('board')">Open Message Board →</button>
+        </div>
+        <div id="homeBoard"></div>
+      </div>
+
+      <!-- LEAGUE DOCUMENTS PREVIEW -->
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0">📄 League Documents</h2>
+          <button class="btn btn-sm" onclick="showSection('docs')">All Documents →</button>
+        </div>
+        <div id="homeDocs" class="doc-gallery"></div>
       </div>
     </section>
 
-    <!-- STANDINGS -->
-     <!-- DECKS & POWER ANALYZER -->
-	 <section id="decks" class="section">
-	   <h1>Commander Decks &amp; Power Analyzer</h1>
-	   <p class="muted">Create a player profile with a 4-digit PIN to save all your decklists and generate a visual Bracket (1–4) + Power Level (1–10) breakdown.</p>
-
-	   <!-- PLAYER ACCOUNT BAR -->
-	   <div class="card" id="deckAccountCard">
-		 <div id="deckLoggedOutView">
-		   <h2>👤 Player Deck Vault Login / Register</h2>
-		   <p class="muted">Pick or enter your player name and a 4-digit PIN to manage your saved decks.</p>
-		   <div class="flex mt-1">
-			 <input type="text" id="deckLoginName" list="knownPlayersList" placeholder="Player name" maxlength="40" style="max-width:210px">
-			 <input type="password" id="deckLoginPin" placeholder="4-digit PIN" maxlength="8" style="max-width:130px">
-			 <button class="btn btn-primary" onclick="loginOrRegisterDeckProfile()">Open My Vault</button>
-		   </div>
-		   <p class="muted mt-1" id="deckAuthMsg"></p>
-		 </div>
-
-		 <div id="deckLoggedInView" class="hidden">
-		   <div class="flex" style="justify-content:space-between">
-			 <div>
-			   <h2 style="margin:0">📦 <span id="deckVaultOwnerName"></span>'s Deck Vault</h2>
-			   <p class="muted" style="font-size:0.85rem">Register a new deck or switch which deck you're piloting tonight.</p>
-			 </div>
-			 <button class="btn btn-sm" onclick="logoutDeckProfile()">Sign Out</button>
-		   </div>
-
-		   <div class="admin-grid mt-2">
-			 <div class="form-group">
-			   <label>Deck Name</label>
-			   <input type="text" id="newDeckTitle" placeholder="e.g., Tenth Doctor Timey-Wimey" maxlength="60">
-			 </div>
-			 <div class="form-group">
-			   <label>Commander(s)</label>
-			   <input type="text" id="newDeckCommander" placeholder="e.g., The Tenth Doctor + Clara Oswald" maxlength="80">
-			 </div>
-		   </div>
-		   <div class="form-group">
-			 <label>Moxfield / Archidekt Link (optional)</label>
-			 <input type="url" id="newDeckUrl" placeholder="https://moxfield.com...">
-		   </div>
-		   <div class="form-group">
-			 <label>Paste Decklist (1 Card Name per line — exported as Text from Moxfield/Archidekt)</label>
-			 <textarea id="newDeckListText" rows="7" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Rhystic Study&#10;1 Cyclonic Rift&#10;..."></textarea>
-		   </div>
-		   <div class="flex">
-			 <button class="btn btn-primary" onclick="savePlayerDeck()">Analyze &amp; Save Deck</button>
-			 <button class="btn" onclick="previewDeckAnalysis()">Preview Power Only</button>
-		   </div>
-		   <div id="deckPreviewBox" class="mt-2"></div>
-
-		   <h3 class="mt-2">My Saved Decks</h3>
-		   <div id="mySavedDecksGrid" class="deck-grid mt-1"></div>
-		 </div>
-	   </div>
-
-	   <!-- PUBLIC LEAGUE DECK SHOWCASE -->
-	   <div class="card">
-		 <div class="flex" style="justify-content:space-between;margin-bottom:0.75rem">
-		   <h2 style="margin:0">⚔️ Registered League Decks</h2>
-		   <label style="display:flex;align-items:center;gap:0.4rem;margin:0;cursor:pointer;color:var(--text)">
-			 <input type="checkbox" id="showAllVaultDecksToggle" onchange="renderDecks()" style="width:auto">
-			 Show all saved decks (not just Active)
-		   </label>
-		 </div>
-		 <div id="publicDecksGrid" class="deck-grid"></div>
-	   </div>
-	 </section>
-
+    <!-- STANDINGS (Strictly on Home Leaders + Standings Tab) -->
+    <section id="standings" class="section">
       <h1>League Standings</h1>
       <p class="muted" id="standingsMeta"></p>
       <div class="card" style="overflow-x:auto">
         <div id="fullStandings"></div>
       </div>
-    </section>
-
-    <!-- NEWS -->
-    <section id="news" class="section">
-      <h1>Upcoming & League News</h1>
-      <div class="card" id="newsList"></div>
     </section>
 
     <!-- MESSAGE BOARD -->
@@ -1824,6 +1778,53 @@
       });
       html += '</tbody></table>';
       document.getElementById('homeLeaders').innerHTML = leaders.length ? html : '<p class="empty">No players yet.</p>';
+      // Home Message Board Preview (latest 3 posts)
+      const homeBoardEl = document.getElementById('homeBoard');
+      if (homeBoardEl) {
+        const recentMsgs = [...(data.messages || [])]
+          .sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); })
+          .slice(0, 3);
+        homeBoardEl.innerHTML = recentMsgs.length
+          ? recentMsgs.map(function(m) {
+              return (
+                '<div class="board-post">' +
+                  '<div class="board-post-meta">' +
+                    '<span class="board-author">' + esc(m.author) + '</span>' +
+                    '<span class="news-date">' + formatBoardDate(m.date) + '</span>' +
+                  '</div>' +
+                  '<div class="board-post-body">' + esc(m.body) + '</div>' +
+                '</div>'
+              );
+            }).join('')
+          : '<p class="empty" style="padding:1rem">No messages yet. Click Open Message Board to post!</p>';
+      }
+
+      // Home Documents Preview (clickable image thumbnails + file links)
+      const homeDocsEl = document.getElementById('homeDocs');
+      if (homeDocsEl) {
+        if (!data.documents || !data.documents.length) {
+          homeDocsEl.innerHTML = '<div class="doc-gallery-empty" style="padding:1rem">No documents uploaded yet.</div>';
+        } else {
+          homeDocsEl.innerHTML = data.documents.slice(0, 4).map(function(d) {
+            const src = getDocImageSrc(d);
+            const isImg = isImageDoc(d);
+            let media;
+            if (isImg && src) {
+              media = '<img src="' + src + '" alt="' + esc(d.title) + '" loading="lazy" onclick="openLightbox(\'' + src.replace(/'/g, "\\'") + '\')">';
+            } else if (d.dataUrl) {
+              media = '<div style="height:140px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.2rem">📄</div>';
+            } else {
+              media = '<div style="height:140px;display:flex;align-items:center;justify-content:center;background:#0a0a10;color:var(--text-muted);font-size:2.2rem">🔗</div>';
+            }
+            const captionLink = d.dataUrl
+              ? '<a href="' + d.dataUrl + '" download="' + esc(d.title) + '">' + esc(d.title) + '</a>'
+              : (d.url && d.url !== '#')
+                ? '<a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.title) + '</a>'
+                : esc(d.title);
+            return '<div class="doc-gallery-item">' + media + '<div class="doc-caption">' + captionLink + '</div></div>';
+          }).join('');
+        }
+      }
 
       const latest = [...data.news].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 2);
       document.getElementById('homeNews').innerHTML = latest.length
