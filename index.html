@@ -242,6 +242,16 @@
       border-radius: 10px;
       padding: 0.85rem 1rem;
     }
+	  .table-pod.my-table {
+      border: 2px solid var(--accent);
+      background: linear-gradient(135deg, #282214, #1e1e2c);
+      box-shadow: 0 0 18px rgba(201, 162, 39, 0.25);
+    }
+    .table-pod li.my-seat {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
     .table-pod-header {
       display: flex; justify-content: space-between; align-items: center;
       margin-bottom: 0.5rem; padding-bottom: 0.4rem;
@@ -1801,7 +1811,18 @@
 
     function renderPodsHtml(pods, isAdminPreview = false) {
       const maxTableOptions = Math.max(pods.length, 6);
+
+      // Detect signed-in player's name (if not in admin preview)
+      let myNormName = '';
+      if (!isAdminPreview && currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
+        myNormName = (data.playerProfiles[currentDeckUser].displayName || '').trim().toLowerCase();
+      }
+
       return pods.map(function(pod, podIdx) {
+        const isMyPod = !isAdminPreview && myNormName && pod.players.some(function(pl) {
+          return (pl || '').trim().toLowerCase() === myNormName;
+        });
+
         let headerLeft = '<span class="table-pod-title">Table ' + pod.tableNumber + '</span>';
         if (isAdminPreview) {
           let opts = '';
@@ -1818,6 +1839,7 @@
         }
 
         const seatsHtml = pod.players.map(function(player, seatIdx) {
+          const isMe = !isAdminPreview && myNormName && (player || '').trim().toLowerCase() === myNormName;
           let swapHtml = '';
           if (isAdminPreview && pods.length > 1) {
             let swapOpts = '<option value="">⇄ Swap</option>';
@@ -1834,25 +1856,30 @@
           }
 
           return (
-            '<li>' +
+            '<li' + (isMe ? ' class="my-seat"' : '') + '>' +
               '<span class="seat-num">' + (seatIdx + 1) + '</span>' +
-              '<span>' + esc(player) + '</span>' +
+              '<span>' + esc(player) + (isMe ? ' (You)' : '') + '</span>' +
               swapHtml +
             '</li>'
           );
         }).join('');
 
+        const rightBadge = isMyPod
+          ? '<span class="badge" style="background:var(--accent);color:#111">★ Your Table</span>'
+          : '<span class="badge">' + pod.players.length + ' Players</span>';
+
         return (
-          '<div class="table-pod">' +
+          '<div class="table-pod' + (isMyPod ? ' my-table' : '') + '">' +
             '<div class="table-pod-header">' +
               headerLeft +
-              '<span class="badge">' + pod.players.length + ' Players</span>' +
+              rightBadge +
             '</div>' +
             '<ol>' + seatsHtml + '</ol>' +
           '</div>'
         );
       }).join('');
     }
+
 
     // ========== PRIZE ELIGIBILITY & TIE-BREAKERS ==========
     function isPlayerPresentInWeek(playerName, w) {
