@@ -2464,17 +2464,14 @@
         }
      if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods, true);
 
-   } else {
-     if (pubBtn) {
-       pubBtn.textContent = '📢 Publish Tables to Home';
-       pubBtn.classList.remove('btn-primary');
+     } else {
+        if (pubBtn) {
+          pubBtn.textContent = '📢 Publish Tables to Home';
+          pubBtn.classList.remove('btn-primary');
+        }
+        if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
+        if (previewEl) previewEl.innerHTML = '';
      }
-    
-      if (prof && prof.displayName) names.add(prof.displayName.trim());
-    });
-
-   }
-
 
       const chartEl = document.getElementById('adminAttendanceChart');
       if (chartEl) {
@@ -2486,6 +2483,7 @@
         for (let w = 1; w <= NUM_WEEKS; w++) {
           getWeekAttendance(w).forEach(n => allNames.add(n.trim()));
         }
+
 
 
         const sortedNames = [...allNames].sort((a, b) => a.localeCompare(b));
