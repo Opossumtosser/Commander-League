@@ -1556,24 +1556,70 @@
       renderAdmin();
     }
 
-    
+        function movePodToTable(podIndex, newTableNum) {
+      if (!adminUnlocked) return;
+      const gt = data.generatedTables;
+      if (!gt || !Array.isArray(gt.pods) || !gt.pods[podIndex]) return;
 
+      const targetNum = parseInt(newTableNum);
+      if (isNaN(targetNum) || targetNum < 1) return;
 
-    function renderPodsHtml(pods) {
-      return pods.map(pod => `
-        <div class="table-pod">
-          <div class="table-pod-header">
-            <span class="table-pod-title">Table ${pod.tableNumber}</span>
-            <span class="badge">${pod.players.length} Players</span>
-          </div>
-          <ol>
-            ${pod.players.map((player, idx) => `
-              <li><span class="seat-num">${idx + 1}</span><span>${esc(player)}</span></li>
-            `).join('')}
-          </ol>
-        </div>
-      `).join('');
+      const currentPod = gt.pods[podIndex];
+      const oldNum = currentPod.tableNumber;
+      if (oldNum === targetNum) return;
+
+      // If another pod is already assigned to targetNum, swap their table numbers
+      const occupant = gt.pods.find((p, idx) => idx !== podIndex && p.tableNumber === targetNum);
+      if (occupant) {
+        occupant.tableNumber = oldNum;
+      }
+      currentPod.tableNumber = targetNum;
+
+      // Keep pods sorted cleanly by physical Table Number
+      gt.pods.sort((a, b) => a.tableNumber - b.tableNumber);
+
+      saveData();
+      renderHome();
+      renderAdmin();
     }
+
+
+
+        function renderPodsHtml(pods, isAdminPreview = false) {
+      const maxTableOptions = Math.max(pods.length, 6);
+      return pods.map((pod, podIdx) => {
+        let headerLeft = `<span class="table-pod-title">Table ${pod.tableNumber}</span>`;
+        if (isAdminPreview) {
+          let opts = '';
+          for (let t = 1; t <= maxTableOptions; t++) {
+            opts += `<option value="${t}" ${pod.tableNumber === t ? 'selected' : ''}>Table ${t}</option>`;
+          }
+          headerLeft = `
+            <div class="flex" style="gap:0.4rem">
+              <span class="table-pod-title">Table</span>
+              <select aria-label="Select physical table number" onchange="movePodToTable(${podIdx}, this.value)" style="width:auto;padding:0.25rem 0.5rem;font-weight:700;color:var(--accent)">
+                ${opts}
+              </select>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="table-pod">
+            <div class="table-pod-header">
+              ${headerLeft}
+              <span class="badge">${pod.players.length} Players</span>
+            </div>
+            <ol>
+              ${pod.players.map((player, idx) => `
+                <li><span class="seat-num">${idx + 1}</span><span>${esc(player)}</span></li>
+              `).join('')}
+            </ol>
+          </div>
+        `;
+      }).join('');
+    }
+
 
     // ========== PRIZE ELIGIBILITY & TIE-BREAKERS ==========
     function isPlayerPresentInWeek(playerName, w) {
@@ -2053,7 +2099,8 @@
           infoEl.textContent = visLabel + ' — ' + gt.pods.length + ' pod' + (gt.pods.length > 1 ? 's' : '') +
             ' for Week ' + gt.week + ' (shuffled ' + gt.shuffleCount + 'x' + repeatNote + (timeStr ? ' · last at ' + timeStr : '') + ').';
         }
-     if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods);
+     if (previewEl) previewEl.innerHTML = renderPodsHtml(gt.pods, true);
+
    } else {
      if (pubBtn) {
        pubBtn.textContent = '📢 Publish Tables to Home';
