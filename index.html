@@ -431,6 +431,80 @@
         <div id="fullStandings"></div>
       </div>
     </section>
+    <!-- DECKS & POWER ANALYZER -->
+    <section id="decks" class="section">
+      <h1>Commander Decks &amp; Power Analyzer</h1>
+      <p class="muted">Create a player profile with a 4-digit PIN to save all your decklists and generate a visual Bracket (1–4) + Power Level (1–10) breakdown.</p>
+
+      <!-- PLAYER ACCOUNT BAR -->
+      <div class="card" id="deckAccountCard">
+        <div id="deckLoggedOutView">
+          <h2>👤 Player Deck Vault Login / Register</h2>
+          <p class="muted">Pick or enter your player name and a 4-digit PIN to manage your saved decks.</p>
+          <div class="flex mt-1">
+            <input type="text" id="deckLoginName" list="knownPlayersList" placeholder="Player name" maxlength="40" style="max-width:210px">
+            <input type="password" id="deckLoginPin" placeholder="4-digit PIN" maxlength="8" style="max-width:130px">
+            <button class="btn btn-primary" onclick="loginOrRegisterDeckProfile()">Open My Vault</button>
+          </div>
+          <p class="muted mt-1" id="deckAuthMsg"></p>
+        </div>
+
+        <div id="deckLoggedInView" class="hidden">
+          <div class="flex" style="justify-content:space-between">
+            <div>
+              <h2 style="margin:0">📦 <span id="deckVaultOwnerName"></span>'s Deck Vault</h2>
+              <p class="muted" style="font-size:0.85rem">Register a new deck or switch which deck you're piloting tonight.</p>
+            </div>
+            <button class="btn btn-sm" onclick="logoutDeckProfile()">Sign Out</button>
+          </div>
+
+          <div class="admin-grid mt-2">
+            <div class="form-group">
+              <label>Deck Name</label>
+              <input type="text" id="newDeckTitle" placeholder="e.g., Tenth Doctor Timey-Wimey" maxlength="60">
+            </div>
+            <div class="form-group">
+              <label>Commander(s)</label>
+              <input type="text" id="newDeckCommander" placeholder="e.g., The Tenth Doctor + Clara Oswald" maxlength="80">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Moxfield / Archidekt Link (optional)</label>
+            <input type="url" id="newDeckUrl" placeholder="https://moxfield.com...">
+          </div>
+          <div class="form-group">
+            <label>Paste Decklist (1 Card Name per line — exported as Text from Moxfield/Archidekt)</label>
+            <textarea id="newDeckListText" rows="7" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Rhystic Study&#10;1 Cyclonic Rift&#10;..."></textarea>
+          </div>
+          <div class="flex">
+            <button class="btn btn-primary" onclick="savePlayerDeck()">Analyze &amp; Save Deck</button>
+            <button class="btn" onclick="previewDeckAnalysis()">Preview Power Only</button>
+          </div>
+          <div id="deckPreviewBox" class="mt-2"></div>
+
+          <h3 class="mt-2">My Saved Decks</h3>
+          <div id="mySavedDecksGrid" class="deck-grid mt-1"></div>
+        </div>
+      </div>
+
+      <!-- PUBLIC LEAGUE DECK SHOWCASE -->
+      <div class="card">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.75rem">
+          <h2 style="margin:0">⚔️ Registered League Decks</h2>
+          <label style="display:flex;align-items:center;gap:0.4rem;margin:0;cursor:pointer;color:var(--text)">
+            <input type="checkbox" id="showAllVaultDecksToggle" onchange="renderDecks()" style="width:auto">
+            Show all saved decks (not just Active)
+          </label>
+        </div>
+        <div id="publicDecksGrid" class="deck-grid"></div>
+      </div>
+    </section>
+
+    <!-- NEWS -->
+    <section id="news" class="section">
+      <h1>Upcoming &amp; League News</h1>
+      <div class="card" id="newsList"></div>
+    </section>
 
     <!-- MESSAGE BOARD -->
     <section id="board" class="section">
