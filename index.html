@@ -395,6 +395,14 @@
           <div class="value" id="homeSeason" style="font-size:1.1rem">Season 1</div>
         </div>
       </div>
+      <!-- SIGNED-IN PLAYER PERSONAL SNAPSHOT -->
+      <div class="card hidden" id="myPersonalStatsCard" style="border-color:var(--accent);background:linear-gradient(135deg, #221e14, #1a1a24)">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0;color:var(--accent)" id="myStatsHeading">👤 My Season Stats</h2>
+          <span class="badge" id="myStatsRankBadge">Rank #—</span>
+        </div>
+        <div id="myStatsBody"></div>
+      </div>
 
       <!-- PLAYER CHECK-IN -->
       <div class="card">
@@ -1947,8 +1955,76 @@
     function weekLabel(w) {
       return isWeekPostponed(w) ? `W${w}⏸` : `W${w}`;
     }
+    function renderMyPersonalStats() {
+      const card = document.getElementById('myPersonalStatsCard');
+      const heading = document.getElementById('myStatsHeading');
+      const rankBadge = document.getElementById('myStatsRankBadge');
+      const body = document.getElementById('myStatsBody');
+      if (!card || !body) return;
+
+      if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      const profile = data.playerProfiles[currentDeckUser];
+      const displayName = profile.displayName || '';
+      const normName = displayName.trim().toLowerCase();
+
+      card.classList.remove('hidden');
+      if (heading) heading.textContent = '👤 ' + displayName + '\'s Season Stats';
+
+      const ranked = sortedPlayers();
+      const rankIdx = ranked.findIndex(function(p) {
+        return (p.name || '').trim().toLowerCase() === normName;
+      });
+
+      if (rankIdx === -1) {
+        if (rankBadge) rankBadge.textContent = 'Unranked';
+        const prizeStatus = getPlayerPrizeStatus(displayName);
+        body.innerHTML =
+          '<p class="muted" style="margin-bottom:0.4rem">No points logged on the standings board yet for <strong>' + esc(displayName) + '</strong>.</p>' +
+          '<div class="flex">' +
+            '<span class="badge">Season Points: 0</span>' +
+            '<span class="badge">Season Challenge: Not Completed</span>' +
+            '<span class="badge" style="color:' + prizeStatus.color + '">' + prizeStatus.label + '</span>' +
+          '</div>';
+        return;
+      }
+
+      const playerObj = ranked.at(rankIdx);
+      ensureWeekly(playerObj);
+      const totalPts = playerTotal(playerObj);
+      const prizeStatus = getPlayerPrizeStatus(playerObj.name);
+
+      if (rankBadge) rankBadge.textContent = 'Rank #' + (rankIdx + 1) + ' of ' + ranked.length;
+
+      const challengeHtml = playerObj.challengeWeek
+        ? '<span style="color:var(--success);font-weight:700">★ Completed (Week ' + playerObj.challengeWeek + ')</span>'
+        : '<span style="color:var(--text-muted)">⏳ Not completed yet</span>';
+
+      let weekChips = '';
+      for (let w = 0; w < NUM_WEEKS; w++) {
+        const pts = playerObj.weeklyPoints[w] || 0;
+        const isCh = playerObj.challengeWeek === (w + 1);
+        weekChips +=
+          '<div style="background:var(--surface);border:1px solid ' + (isCh ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;padding:0.3rem 0.55rem;text-align:center;min-width:48px">' +
+            '<div style="font-size:0.7rem;color:var(--text-muted)">W' + (w + 1) + '</div>' +
+            '<div style="font-weight:700;color:' + (isCh ? 'var(--accent)' : 'var(--text)') + '">' + pts + (isCh ? '★' : '') + '</div>' +
+          '</div>';
+      }
+
+      body.innerHTML =
+        '<div class="flex" style="justify-content:space-between;margin-bottom:0.65rem">' +
+          '<div><span class="muted">Season Total:</span> <strong style="font-size:1.25rem;color:var(--accent)">' + totalPts + ' pts</strong></div>' +
+          '<div><span class="muted">Season Challenge:</span> ' + challengeHtml + '</div>' +
+          '<div style="font-size:0.85rem;font-weight:600;color:' + prizeStatus.color + '">' + prizeStatus.label + '</div>' +
+        '</div>' +
+        '<div class="flex" style="gap:0.4rem">' + weekChips + '</div>';
+    }
 
     function renderHome() {
+	  renderMyPersonalStats();	
       const postNote = isWeekPostponed(data.week) ? ' (Postponed)' : '';
       document.getElementById('homeWeek').textContent = `Week ${data.week}${postNote}`;
       document.getElementById('homeSeason').textContent = data.season;
