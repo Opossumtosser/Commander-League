@@ -3109,31 +3109,37 @@
         publicGrid.innerHTML = '<p class="empty" style="grid-column:1/-1">No decks registered yet. Sign in above to add yours!</p>';
       }
     }
- // ========== WELCOME SIGN-IN GATE & AUTO CHECK-IN ==========
- function openWelcomeGate() {
-   const ov = document.getElementById('welcomeOverlay');
-   if (!ov) return;
-   const titleEl = document.getElementById('welcomeLeagueTitle');
-   const wkEl = document.getElementById('welcomeWeekLabel');
-   if (titleEl) titleEl.textContent = data.leagueTitle || 'C&L Commander League';
-   if (wkEl) wkEl.textContent = 'Week ' + data.week + ' · Sign in to check in for tonight\'s games & access your Deck Vault.';
-   try {
-     const remembered = localStorage.getItem('mtgLeagueCheckinName');
-     const nameInp = document.getElementById('welcomeLoginName');
-     if (remembered && nameInp && !nameInp.value) nameInp.value = remembered;
-   } catch (_) {}
-   ov.classList.remove('hidden');
- }
+    function openWelcomeGate() {
+      const ov = document.getElementById('welcomeOverlay');
+      if (!ov) return;
+      const titleEl = document.getElementById('welcomeLeagueTitle');
+      const wkEl = document.getElementById('welcomeWeekLabel');
+      if (titleEl) titleEl.textContent = data.leagueTitle || 'C&L Commander League';
+      if (wkEl) wkEl.textContent = 'Week ' + data.week + ' · Sign in to access your Deck Vault or check in for tonight\'s games.';
+      try {
+        const remembered = localStorage.getItem('mtgLeagueCheckinName');
+        const nameInp = document.getElementById('welcomeLoginName');
+        if (remembered && nameInp && !nameInp.value) nameInp.value = remembered;
+      } catch (_) {}
+      ov.classList.remove('hidden');
+      ov.style.display = 'flex';
+    }
 
- function enterAsGuest() {
-   const ov = document.getElementById('welcomeOverlay');
-   if (ov) ov.classList.add('hidden');
-   try { sessionStorage.setItem('mtgLeagueGateDismissed', 'guest'); } catch (_) {}
-   updateHeaderAccountUi();
-   showSection('home');
- }
+    function hideWelcomeGate() {
+      const ov = document.getElementById('welcomeOverlay');
+      if (!ov) return;
+      ov.classList.add('hidden');
+      ov.style.display = 'none';
+    }
 
- function welcomeSignInSubmit() {
+    function enterAsGuest() {
+      hideWelcomeGate();
+      try { sessionStorage.setItem('mtgLeagueGateDismissed', 'guest'); } catch (_) {}
+      updateHeaderAccountUi();
+      showSection('home');
+    }
+
+    function welcomeSignInSubmit() {
       const rawName = (document.getElementById('welcomeLoginName').value || '').trim();
       const pin = (document.getElementById('welcomeLoginPin').value || '').trim();
       const alsoCheckIn = !!(document.getElementById('welcomeAlsoCheckIn') && document.getElementById('welcomeAlsoCheckIn').checked);
@@ -3183,8 +3189,7 @@
       document.getElementById('welcomeLoginPin').value = '';
       msgEl.textContent = '';
 
-      const ov = document.getElementById('welcomeOverlay');
-      if (ov) ov.classList.add('hidden');
+      hideWelcomeGate();
 
       saveData();
       renderAll();
@@ -3202,6 +3207,27 @@
         }
       }
     }
+
+    function initWelcomeGateOnLoad() {
+      let dismissed = null;
+      let savedUser = null;
+      try {
+        dismissed = sessionStorage.getItem('mtgLeagueGateDismissed');
+        savedUser = localStorage.getItem('mtgLeagueSavedUser');
+      } catch (_) {}
+
+      if (savedUser && data.playerProfiles && data.playerProfiles[savedUser]) {
+        currentDeckUser = savedUser;
+      }
+
+      if (dismissed) {
+        hideWelcomeGate();
+      } else {
+        openWelcomeGate();
+      }
+      updateHeaderAccountUi();
+    }
+
 function printAttendanceSheet() {
       if (!adminUnlocked) return;
 
