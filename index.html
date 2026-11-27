@@ -2194,13 +2194,6 @@
       const heading = document.getElementById('myStatsHeading');
       const rankBadge = document.getElementById('myStatsRankBadge');
       const body = document.getElementById('myStatsBody');
-	  const seasonBudgetStr = formatMoney(data.treasury ? data.treasury.seasonBudget : 0);
-      const mySpendObj = data.treasury && data.treasury.playerSpend ? data.treasury.playerSpend[normName] : null;
-      const mySpentStr = formatMoney(mySpendObj ? mySpendObj.amount : 0);
-      const promoHtml = playerObj.promoPoint
-        ? '<span style="color:#6cd484;font-weight:700">✅ +1 pt Active</span>'
-        : '<span style="color:var(--text-muted)">Not earned yet</span>';
-
       if (!card || !body) return;
 
       if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
@@ -2214,6 +2207,10 @@
 
       card.classList.remove('hidden');
       if (heading) heading.textContent = '👤 ' + displayName + '\'s Season Stats';
+
+      const seasonBudgetStr = formatMoney(data.treasury ? data.treasury.seasonBudget : 0);
+      const mySpendObj = (data.treasury && data.treasury.playerSpend) ? data.treasury.playerSpend[normName] : null;
+      const mySpentStr = formatMoney(mySpendObj ? mySpendObj.amount : 0);
 
       const weeksAttended = getPlayerSeasonAttendanceCount(displayName);
       const banner = getDetailedPlayerPrizeBanner(displayName);
@@ -2236,11 +2233,8 @@
             '<span class="badge">Season Points: 0</span>' +
             '<span class="badge">Season Wins: 0</span>' +
             '<span class="badge">Attendance: ' + weeksAttended + '/' + NUM_WEEKS + ' wks</span>' +
-            '<span class="badge">Season Challenge: Not Completed</span>' +
-		    '<div><span class="muted">Season Prize Budget:</span> <strong style="color:var(--accent)">' + seasonBudgetStr + '</strong></div>' +
-            '<div><span class="muted">My LGS Spend:</span> <strong>' + mySpentStr + '</strong></div>' +
-            '<div><span class="muted">Promo Point:</span> ' + promoHtml + '</div>' +
-
+            '<span class="badge">Season Prize Budget: ' + seasonBudgetStr + '</span>' +
+            '<span class="badge">My LGS Spend: ' + mySpentStr + '</span>' +
           '</div>';
         return;
       }
@@ -2255,6 +2249,10 @@
       const challengeHtml = playerObj.challengeWeek
         ? '<span style="color:var(--success);font-weight:700">★ Completed (Week ' + playerObj.challengeWeek + ')</span>'
         : '<span style="color:var(--text-muted)">⏳ Not completed yet</span>';
+
+      const promoHtml = playerObj.promoPoint
+        ? '<span style="color:#6cd484;font-weight:700">✅ +1 pt Active</span>'
+        : '<span style="color:var(--text-muted)">Not earned yet</span>';
 
       let weekChips = '';
       for (let w = 0; w < NUM_WEEKS; w++) {
@@ -2279,9 +2277,13 @@
           '<div><span class="muted">Season Wins:</span> <strong style="color:var(--accent)">🏆 ' + totalWins + '</strong></div>' +
           '<div><span class="muted">Attendance:</span> <strong>' + weeksAttended + '/' + NUM_WEEKS + ' weeks</strong></div>' +
           '<div><span class="muted">Challenge:</span> ' + challengeHtml + '</div>' +
+          '<div><span class="muted">Season Prize Budget:</span> <strong style="color:var(--accent)">' + seasonBudgetStr + '</strong></div>' +
+          '<div><span class="muted">My LGS Spend:</span> <strong>' + mySpentStr + '</strong></div>' +
+          '<div><span class="muted">Promo Point:</span> ' + promoHtml + '</div>' +
         '</div>' +
         '<div class="flex" style="gap:0.4rem">' + weekChips + '</div>';
     }
+
 
 
 
