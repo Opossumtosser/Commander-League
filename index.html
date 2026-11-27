@@ -2483,10 +2483,7 @@
       const postNote = isWeekPostponed(data.week) ? ' · Week postponed' : '';
       document.getElementById('standingsMeta').textContent =
         `${data.season} · Week ${data.week}${postNote} · Prize Rule: 3+ weeks attended + Week 6 attendance`;
-      const councilRoles = getPlayerCouncilRoles(p.name);
-      const councilBadge = councilRoles.map(function(r) {
-        return ' <span class="badge" title="' + esc(r.full) + '">' + esc(r.short) + '</span>';
-      }).join('');
+     
 
       const players = sortedPlayers();
       if (!players.length) {
@@ -2517,7 +2514,12 @@
         const promoBadge = p.promoPoint
           ? ' <span class="badge" title="LGS Promo Point (+1 pt)" style="border-color:var(--success);color:#6cd484">+1 🎁</span>'
           : '';
+        const councilRoles = getPlayerCouncilRoles(p.name);
+        const councilBadge = councilRoles.map(function(r) {
+          return ' <span class="badge" title="' + esc(r.full) + '">' + esc(r.short) + '</span>';
+        }).join('');
         let row = `<tr><td class="rank ${rankClass}">${i + 1}</td><td>${esc(p.name)}${chBadge}${promoBadge}${councilBadge}<span class="muted" style="font-size:0.78rem">${tbNote}</span></td>`;
+
 
         if (weekly) {
           for (let w = 0; w < NUM_WEEKS; w++) {
