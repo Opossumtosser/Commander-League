@@ -779,12 +779,7 @@
     <!-- ADMIN -->
     <section id="admin" class="section">
       <h1>Admin Panel</h1>
-	      <div id="adminAttendanceChart" style="overflow-x:auto"></div>
-          <div class="flex mt-1">
-            <button class="btn btn-primary" onclick="printAttendanceSheet()">🖨️ Print Attendance Sheet</button>
-            <button class="btn btn-sm btn-danger" onclick="clearWeekAttendance()">Clear Current Week Check-Ins</button>
-            <button class="btn btn-sm btn-danger" onclick="clearWeekPodHistory()">Clear Current Week Pod History</button>
-          </div>
+	     
 
       <div id="adminGate" class="card">
         <p class="muted">Enter admin password to edit league data.</p>
@@ -2019,89 +2014,91 @@
       renderAdmin();
     }
 
-    function renderPodsHtml(pods, isAdminPreview = false) {
-      const maxTableOptions = Math.max(pods.length, 6);
-      const adminLogBtn = isAdminPreview
-        ? '<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border);text-align:right">' +
-            '<button class="btn btn-sm btn-primary" onclick="recordPodGameResult(' + podIdx + ')">🏆 Log Pod Game &amp; Deck Stats</button>' +
-          '</div>'
+function renderPodsHtml(pods, isAdminPreview = false) {
+  const maxTableOptions = Math.max(pods.length, 6);
+
+  let myNormName = '';
+  if (!isAdminPreview && currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
+    myNormName = (data.playerProfiles[currentDeckUser].displayName || '').trim().toLowerCase();
+  }
+
+  return pods.map(function(pod, podIdx) {
+    const isMyPod = !isAdminPreview && myNormName && pod.players.some(function(pl) {
+      return (pl || '').trim().toLowerCase() === myNormName;
+    });
+
+    let headerLeft = '<span class="table-pod-title">Table ' + pod.tableNumber + '</span>';
+    if (isAdminPreview) {
+      let opts = '';
+      for (let t = 1; t <= maxTableOptions; t++) {
+        opts += '<option value="' + t + '"' + (pod.tableNumber === t ? ' selected' : '') + '>Table ' + t + '</option>';
+      }
+      headerLeft =
+        '<div class="flex" style="gap:0.4rem">' +
+          '<span class="table-pod-title">Table</span>' +
+          '<select aria-label="Select physical table number" onchange="movePodToTable(' + podIdx + ', this.value)" style="width:auto;padding:0.25rem 0.5rem;font-weight:700;color:var(--accent)">' +
+            opts +
+          '</select>' +
+        '</div>';
+    }
+
+    const seatsHtml = pod.players.map(function(player, seatIdx) {
+      const isMe = !isAdminPreview && myNormName && (player || '').trim().toLowerCase() === myNormName;
+      const pKey = (player || '').trim().toLowerCase();
+      const chosenDeck = data.tonightDecks && data.tonightDecks[pKey];
+      const deckTag = chosenDeck
+        ? ' <span class="badge" style="font-size:0.7rem;margin-left:0.35rem" title="' + esc(chosenDeck.commander) + '">' +
+            esc(chosenDeck.deckTitle) + (chosenDeck.borrowedFrom ? ' (from ' + esc(chosenDeck.borrowedFrom) + ')' : '') +
+          '</span>'
         : '';
 
-      // Detect signed-in player's name (if not in admin preview)
-      let myNormName = '';
-      if (!isAdminPreview && currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
-        myNormName = (data.playerProfiles[currentDeckUser].displayName || '').trim().toLowerCase();
+      let swapHtml = '';
+      if (isAdminPreview && pods.length > 1) {
+        let swapOpts = '<option value="">⇄ Swap</option>';
+        pods.forEach(function(otherPod, otherPodIdx) {
+          if (otherPodIdx === podIdx) return;
+          otherPod.players.forEach(function(otherPlayer, otherSeatIdx) {
+            swapOpts += '<option value="' + otherPodIdx + ':' + otherSeatIdx + '">⇄ ' + esc(otherPlayer) + ' (T' + otherPod.tableNumber + ')</option>';
+          });
+        });
+        swapHtml =
+          '<select aria-label="Swap player with another table" onchange="swapPodPlayers(' + podIdx + ', ' + seatIdx + ', this.value)" style="width:auto;max-width:125px;padding:0.18rem 0.35rem;font-size:0.75rem;margin-left:auto">' +
+            swapOpts +
+          '</select>';
       }
 
-      return pods.map(function(pod, podIdx) {
-        const isMyPod = !isAdminPreview && myNormName && pod.players.some(function(pl) {
-          return (pl || '').trim().toLowerCase() === myNormName;
-        });
+      return (
+        '<li' + (isMe ? ' class="my-seat"' : '') + '>' +
+          '<span class="seat-num">' + (seatIdx + 1) + '</span>' +
+          '<span>' + esc(player) + (isMe ? ' (You)' : '') + deckTag + '</span>' +
+          swapHtml +
+        '</li>'
+      );
+    }).join('');
 
-        let headerLeft = '<span class="table-pod-title">Table ' + pod.tableNumber + '</span>';
-        if (isAdminPreview) {
-          let opts = '';
-          for (let t = 1; t <= maxTableOptions; t++) {
-            opts += '<option value="' + t + '"' + (pod.tableNumber === t ? ' selected' : '') + '>Table ' + t + '</option>';
-          }
-          headerLeft =
-            '<div class="flex" style="gap:0.4rem">' +
-              '<span class="table-pod-title">Table</span>' +
-              '<select aria-label="Select physical table number" onchange="movePodToTable(' + podIdx + ', this.value)" style="width:auto;padding:0.25rem 0.5rem;font-weight:700;color:var(--accent)">' +
-                opts +
-              '</select>' +
-            '</div>';
-        }
+    const rightBadge = isMyPod
+      ? '<span class="badge" style="background:var(--accent);color:#111">★ Your Table</span>'
+      : '<span class="badge">' + pod.players.length + ' Players</span>';
 
-        const seatsHtml = pod.players.map(function(player, seatIdx) {
-          const isMe = !isAdminPreview && myNormName && (player || '').trim().toLowerCase() === myNormName;
-          let swapHtml = '';
-          if (isAdminPreview && pods.length > 1) {
-            let swapOpts = '<option value="">⇄ Swap</option>';
-            pods.forEach(function(otherPod, otherPodIdx) {
-              if (otherPodIdx === podIdx) return;
-              otherPod.players.forEach(function(otherPlayer, otherSeatIdx) {
-                swapOpts += '<option value="' + otherPodIdx + ':' + otherSeatIdx + '">⇄ ' + esc(otherPlayer) + ' (T' + otherPod.tableNumber + ')</option>';
-              });
-            });
-            swapHtml =
-              '<select aria-label="Swap player with another table" onchange="swapPodPlayers(' + podIdx + ', ' + seatIdx + ', this.value)" style="width:auto;max-width:125px;padding:0.18rem 0.35rem;font-size:0.75rem;margin-left:auto">' +
-                swapOpts +
-              '</select>';
-          }
+    const adminLogBtn = isAdminPreview
+      ? '<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border);text-align:right">' +
+          '<button class="btn btn-sm btn-primary" onclick="recordPodGameResult(' + podIdx + ')">🏆 Log Pod Game &amp; Deck Stats</button>' +
+        '</div>'
+      : '';
 
-          return (
-            '<li' + (isMe ? ' class="my-seat"' : '') + '>' +
-              '<span class="seat-num">' + (seatIdx + 1) + '</span>' +
-              '<span>' + esc(player) + (isMe ? ' (You)' : '') + '</span>' +
-              swapHtml +
-            '</li>'
-          );
-        }).join('');
-	     // Inside seatsHtml map, right after esc(player):
-	    const pKey = (player || '').trim().toLowerCase();
-	    const chosenDeck = data.tonightDecks && data.tonightDecks[pKey];
-	    const deckTag = chosenDeck
-	      ? ' <span class="badge" style="font-size:0.7rem;margin-left:0.35rem" title="' + esc(chosenDeck.commander) + '">' +
-	          esc(chosenDeck.deckTitle) + (chosenDeck.borrowedFrom ? ' (from ' + esc(chosenDeck.borrowedFrom) + ')' : '') +
-	        '</span>'
-	      : '';
+    return (
+      '<div class="table-pod' + (isMyPod ? ' my-table' : '') + '">' +
+        '<div class="table-pod-header">' +
+          headerLeft +
+          rightBadge +
+        '</div>' +
+        '<ol>' + seatsHtml + '</ol>' +
+        adminLogBtn +
+      '</div>'
+    );
+  }).join('');
+}
 
-        const rightBadge = isMyPod
-          ? '<span class="badge" style="background:var(--accent);color:#111">★ Your Table</span>'
-          : '<span class="badge">' + pod.players.length + ' Players</span>';
-
-        return (
-          '<div class="table-pod' + (isMyPod ? ' my-table' : '') + '">' +
-            '<div class="table-pod-header">' +
-              headerLeft +
-              rightBadge +
-            '</div>' +
-            '<ol>' + seatsHtml + '</ol>' +
-          '</div>'
-        );
-      }).join('');
-    }
 
 
     // ========== PRIZE ELIGIBILITY & TIE-BREAKERS ==========
@@ -2875,10 +2872,49 @@
           pubBtn.classList.remove('btn-primary');
         }
         if (infoEl) infoEl.textContent = 'No tables generated for Week ' + data.week + ' yet.';
-        if (previewEl) previewEl.innerHTML = '';
+                if (previewEl) previewEl.innerHTML = '';
       }
 
+      const chartEl = document.getElementById('adminAttendanceChart');
+      if (chartEl) {
+        const allNames = new Set();
+        (data.players || []).forEach(function(p) { if (p.name) allNames.add(p.name.trim()); });
+        Object.values(data.playerProfiles || {}).forEach(function(prof) {
+          if (prof && prof.displayName) allNames.add(prof.displayName.trim());
+        });
+        for (let w = 1; w <= NUM_WEEKS; w++) {
+          getWeekAttendance(w).forEach(function(n) { allNames.add(n.trim()); });
+        }
+        const sortedNames = [...allNames].sort(function(a, b) { return a.localeCompare(b); });
+        if (!sortedNames.length) {
+          chartEl.innerHTML = '<p class="muted">No players or check-ins recorded yet.</p>';
+        } else {
+          let tbl = '<table class="att-table" style="font-size:0.85rem"><thead><tr><th>Player</th>';
+          for (let w = 1; w <= NUM_WEEKS; w++) {
+            tbl += '<th>' + weekLabel(w) + '</th>';
+          }
+          tbl += '<th>Total</th><th>Prize Status</th></tr></thead><tbody>';
+          sortedNames.forEach(function(name) {
+            let attendedCount = 0;
+            let row = '<tr><td>' + esc(name) + '</td>';
+            for (let w = 1; w <= NUM_WEEKS; w++) {
+              const present = isPlayerPresentInWeek(name, w);
+              if (present) attendedCount++;
+              row += present ? '<td class="att-check">✓</td>' : '<td class="att-miss">—</td>';
+            }
+            const status = getPlayerPrizeStatus(name);
+            row += '<td class="points" style="font-size:0.95rem">' + attendedCount + '/' + NUM_WEEKS + '</td>';
+            row += '<td style="font-size:0.8rem;font-weight:600;color:' + status.color + '">' + status.label + '</td></tr>';
+            tbl += row;
+          });
+          tbl += '</tbody></table>';
+          chartEl.innerHTML = tbl;
+        }
+      }
+    }
+
     function renderAdminVoterLog() {
+
       const logEl = document.getElementById('adminVoterLog');
       if (!logEl) return;
       const log = Array.isArray(data.vote.voterLog) ? data.vote.voterLog : [];
@@ -4817,12 +4853,28 @@
 
         const vsLabel = document.createElement('div');
         vsLabel.className = 'muted';
-        vsBox.appendChild(row);
-      
-      wrap.appendChild(vsBox);
+        vsLabel.style.cssText = 'font-size:0.82rem;margin-bottom:0.35rem';
+        vsLabel.textContent = 'Recorded Matchups Against Other League Decks:';
+        vsBox.appendChild(vsLabel);
+
+        st.vsList.forEach(function(v) {
+          const pct = v.games ? Math.round((v.wins / v.games) * 100) : 0;
+          const row = document.createElement('div');
+          row.className = 'voter-log-row';
+          const left = document.createElement('span');
+          left.textContent = 'vs. ' + v.deckTitle + ' (' + v.commander + ')';
+          const right = document.createElement('span');
+          right.style.fontWeight = '700';
+          right.textContent = v.wins + 'W-' + (v.games - v.wins) + 'L (' + pct + '%)';
+          row.appendChild(left);
+          row.appendChild(right);
+          vsBox.appendChild(row);
+        });
+        wrap.appendChild(vsBox);
+      }
+
+      resBox.appendChild(wrap);
     }
-    resBox.appendChild(wrap);
-  }
 
     // ========== COMMANDER COUNCIL ROLES & BADGES ==========
  function getPlayerCouncilRoles(playerName) {
