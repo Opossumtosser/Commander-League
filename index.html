@@ -359,6 +359,8 @@
         <button data-section="admin" onclick="showSection('admin')">Admin</button>
         <button id="headerAccountBtn" class="btn-sm" style="border-color:var(--accent);color:var(--accent)" onclick="openWelcomeGate()">Sign In</button>
 		<button data-section="treasury" onclick="showSection('treasury')">Treasury</button>
+		<button data-section="vp" onclick="showSection('vp')">VP</button>
+
 
       </nav>
 
@@ -611,6 +613,88 @@
             <input type="password" id="newTreasuryPassInput" placeholder="New treasury password" style="max-width:240px">
             <button class="btn" onclick="changeTreasuryPassword()">Update Password</button>
             <button class="btn btn-danger" onclick="lockTreasury()" style="margin-left:auto">Lock Treasury</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- VP OF COMMUNITY & CHALLENGES TAB -->
+    <section id="vp" class="section">
+      <h1>🛡️ VP of Community &amp; Challenges</h1>
+      <p class="muted">Season challenges, new player onboarding, and player engagement.</p>
+
+      <!-- PUBLIC SEASON CHALLENGE BANNER (VISIBLE TO ALL PLAYERS) -->
+      <div class="card" style="border-color:var(--accent)">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.4rem">
+          <h2 style="margin:0;color:var(--accent)">★ Active Season Challenge</h2>
+          <span class="badge" id="vpChallengeProgressBadge">0 Completed</span>
+        </div>
+        <div id="publicSeasonChallengeText" style="white-space:pre-wrap;line-height:1.55"></div>
+      </div>
+
+      <!-- VP PASSWORD GATE -->
+      <div id="vpGate" class="card" style="max-width:380px;margin:1.25rem auto">
+        <h2>🔐 VP Access</h2>
+        <p class="muted">Enter the VP password to manage Season Challenges, onboard new players, and review player feedback.</p>
+        <div class="form-group mt-1">
+          <input type="password" id="vpPassInput" placeholder="VP password">
+        </div>
+        <button class="btn btn-primary" onclick="unlockVp()">Unlock VP Panel</button>
+      </div>
+
+      <!-- VP CONTROL PANEL (HIDDEN UNTIL UNLOCKED) -->
+      <div id="vpPanel" class="hidden">
+        <!-- SEASON CHALLENGE EDITOR -->
+        <div class="card">
+          <h2>★ Season Challenge Setup</h2>
+          <p class="muted">Describe the once-per-season challenge here so players see it on this tab.</p>
+          <div class="form-group mt-1">
+            <textarea id="vpChallengeDescInput" rows="4" placeholder="e.g., Win a game with 40+ life, cast your commander 4+ times in one game, or eliminate two opponents in the same combat step..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="saveVpChallengeDesc()">Save Challenge Description</button>
+        </div>
+
+        <!-- PLAYER CHALLENGE COMPLETION TRACKER -->
+        <div class="card" style="overflow-x:auto">
+          <h2>✅ Verify Player Season Challenges (W1–W6)</h2>
+          <p class="muted">Select the week a player completed their once-per-season challenge. Updates Standings and Personal Stats immediately.</p>
+          <div id="vpChallengePlayersTable" class="mt-1"></div>
+        </div>
+
+        <!-- NEW PLAYER ONBOARDING WIZARD -->
+        <div class="card">
+          <h2>👋 New Player Quick Onboarding</h2>
+          <p class="muted">Creates the player's Deck Vault account + 4-digit PIN, adds them to the Standings roster, and optionally checks them in for tonight.</p>
+          <div class="admin-grid mt-1">
+            <div class="form-group">
+              <label>New Player Name</label>
+              <input type="text" id="vpOnboardName" placeholder="Player name" maxlength="40">
+            </div>
+            <div class="form-group">
+              <label>4-Digit PIN</label>
+              <input type="text" id="vpOnboardPin" placeholder="e.g., 1234" maxlength="8">
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:0.5rem;color:var(--text);cursor:pointer;margin-bottom:0.75rem">
+            <input type="checkbox" id="vpOnboardCheckIn" checked style="width:auto">
+            Also check them in for tonight's active week
+          </label>
+          <button class="btn btn-primary" onclick="vpOnboardNewPlayer()">Create Profile &amp; Onboard</button>
+        </div>
+
+        <!-- MESSAGE BOARD MODERATION & PLAYER VOICE -->
+        <div class="card">
+          <h2>💬 Message Board &amp; Player Feedback</h2>
+          <p class="muted">Review recent player posts or remove inappropriate messages.</p>
+          <div id="vpBoardModerationList" class="mt-1"></div>
+        </div>
+
+        <!-- VP PASSWORD SETTINGS -->
+        <div class="card">
+          <h2>🔑 Change VP Password</h2>
+          <div class="flex mt-1">
+            <input type="password" id="newVpPassInput" placeholder="New VP password" style="max-width:240px">
+            <button class="btn" onclick="changeVpPassword()">Update Password</button>
+            <button class="btn btn-danger" onclick="lockVp()" style="margin-left:auto">Lock VP Panel</button>
           </div>
         </div>
       </div>
@@ -1307,6 +1391,14 @@
           community: ''
         };
       }
+      if (!d.vp || typeof d.vp !== 'object') {
+        d.vp = {
+          password: 'community',
+          challengeDescription: 'Complete the once-per-season Commander Challenge during any league pod (Weeks 1–6) and have the VP of Community verify it for your ★ badge!'
+        };
+      }
+      if (!d.vp.password) d.vp.password = 'community';
+      if (typeof d.vp.challengeDescription !== 'string') d.vp.challengeDescription = '';
 
       if (!d.seasonStartDate) d.seasonStartDate = DEFAULT_DATA.seasonStartDate;
       if (!d.seasonEndDate) d.seasonEndDate = DEFAULT_DATA.seasonEndDate;
@@ -1572,6 +1664,7 @@
       renderVote();
 	  renderRules();
 	  renderTreasury();
+	  renderVp();
       updateHeaderAccountUi();
 
     }
@@ -5000,6 +5093,185 @@ function renderPodsHtml(pods, isAdminPreview = false) {
    renderAdmin();
    alert('Commander Council roles saved!');
  }
+    // ========== VP OF COMMUNITY & CHALLENGES PANEL ==========
+ let vpUnlocked = false;
+
+ function unlockVp() {
+   const inp = document.getElementById('vpPassInput');
+   const pass = inp ? inp.value : '';
+   const expected = (data.vp && data.vp.password) ? data.vp.password : 'community';
+   if (pass === expected) {
+     vpUnlocked = true;
+     document.getElementById('vpGate').classList.add('hidden');
+     document.getElementById('vpPanel').classList.remove('hidden');
+     if (inp) inp.value = '';
+     renderVp();
+     } else {
+        alert('Incorrect VP password.');
+      }
+    }
+
+ function lockVp() {
+      vpUnlocked = false;
+      document.getElementById('vpGate').classList.remove('hidden');
+      document.getElementById('vpPanel').classList.add('hidden');
+    }
+
+ function changeVpPassword() {
+      if (!vpUnlocked) return;
+      const inp = document.getElementById('newVpPassInput');
+      const nextPass = (inp ? inp.value : '').trim();
+      if (nextPass.length < 4) return alert('Enter a password at least 4 characters long.');
+      data.vp.password = nextPass;
+      inp.value = '';
+      saveData();
+      alert('VP password updated!');
+    }
+  function saveVpChallengeDesc() {
+      if (!vpUnlocked) return;
+      const box = document.getElementById('vpChallengeDescInput');
+      if (!box) return;
+      data.vp.challengeDescription = box.value.trim();
+      saveData();
+      renderVp();
+      alert('Season Challenge description updated!');
+    }
+
+    function vpSetPlayerChallengeWeek(playerIdx, weekVal) {
+      if (!vpUnlocked || !data.players[playerIdx]) return;
+      const parsed = parseInt(weekVal);
+      data.players[playerIdx].challengeWeek = (!isNaN(parsed) && parsed >= 1 && parsed <= NUM_WEEKS) ? parsed : null;
+      saveData();
+      renderAll();
+      if (adminUnlocked) renderAdmin();
+    }
+
+    function vpOnboardNewPlayer() {
+      if (!vpUnlocked) return;
+      const rawName = (document.getElementById('vpOnboardName').value || '').trim();
+      const pin = (document.getElementById('vpOnboardPin').value || '').trim();
+      const doCheckIn = !!(document.getElementById('vpOnboardCheckIn') && document.getElementById('vpOnboardCheckIn').checked);
+
+      if (!rawName) return alert('Enter the new player name.');
+      if (!/^\d{4,8}$/.test(pin)) return alert('Enter a 4–8 digit PIN.');
+
+      const cleanName = rawName.slice(0, 40);
+      const key = cleanName.toLowerCase();
+
+      if (!data.playerProfiles) data.playerProfiles = {};
+      if (!data.playerProfiles[key]) {
+        data.playerProfiles[key] = {
+          displayName: cleanName,
+          pin: pin,
+          decks: []
+        };
+      } else {
+        data.playerProfiles[key].pin = pin;
+      }
+
+      const onRoster = (data.players || []).some(function(p) {
+        return (p.name || '').trim().toLowerCase() === key;
+      });
+      if (!onRoster) {
+        data.players.push({
+          name: cleanName,
+          weeklyPoints: Array(NUM_WEEKS).fill(0),
+          weeklyWins: Array(NUM_WEEKS).fill(false),
+          challengeWeek: null,
+          promoPoint: false
+        });
+      }
+
+      if (doCheckIn) {
+        addNameToWeekAttendance(cleanName, data.week);
+      }
+
+      document.getElementById('vpOnboardName').value = '';
+      document.getElementById('vpOnboardPin').value = '';
+
+      saveData();
+      renderAll();
+      if (adminUnlocked) renderAdmin();
+      alert('Onboarded ' + cleanName + ' (PIN: ' + pin + ')' + (doCheckIn ? ' and checked them into Week ' + data.week : '') + '!');
+    }
+
+    function vpDeleteBoardMessage(id) {
+      if (!vpUnlocked) return;
+      if (!confirm('Delete this message from the board?')) return;
+      data.messages = (data.messages || []).filter(function(m) { return m.id !== id; });
+      saveData();
+      renderAll();
+    }
+
+    function renderVp() {
+      if (!data.vp) return;
+
+      const pubDesc = document.getElementById('publicSeasonChallengeText');
+      if (pubDesc) {
+        pubDesc.textContent = data.vp.challengeDescription || 'No Season Challenge description posted yet.';
+      }
+
+      const completedCount = (data.players || []).filter(function(p) { return !!p.challengeWeek; }).length;
+      const badgeEl = document.getElementById('vpChallengeProgressBadge');
+      if (badgeEl) {
+        badgeEl.textContent = completedCount + ' of ' + (data.players ? data.players.length : 0) + ' Completed';
+      }
+
+      if (!vpUnlocked) return;
+
+      const descInput = document.getElementById('vpChallengeDescInput');
+      if (descInput && document.activeElement !== descInput) {
+        descInput.value = data.vp.challengeDescription || '';
+      }
+
+      const tblWrap = document.getElementById('vpChallengePlayersTable');
+      if (tblWrap) {
+        if (!data.players || !data.players.length) {
+          tblWrap.innerHTML = '<p class="muted">No players on the roster yet.</p>';
+        } else {
+          let rows = data.players.map(function(p, idx) {
+            const chVal = p.challengeWeek || '';
+            let opts = '<option value="">Not yet</option>';
+            for (let w = 1; w <= NUM_WEEKS; w++) {
+              opts += '<option value="' + w + '"' + (Number(chVal) === w ? ' selected' : '') + '>Week ' + w + '</option>';
+            }
+            const statusHtml = chVal
+              ? '<span style="color:var(--success);font-weight:700">★ Completed (W' + chVal + ')</span>'
+              : '<span class="muted">Pending</span>';
+            return (
+              '<tr>' +
+                '<td><strong>' + esc(p.name) + '</strong></td>' +
+                '<td>' + statusHtml + '</td>' +
+                '<td><select onchange="vpSetPlayerChallengeWeek(' + idx + ', this.value)" style="width:130px;padding:0.35rem">' + opts + '</select></td>' +
+              '</tr>'
+            );
+          }).join('');
+
+          tblWrap.innerHTML =
+            '<table style="font-size:0.9rem"><thead><tr>' +
+              '<th>Player</th><th>Challenge Status</th><th>Week Completed</th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }
+      }
+
+      const boardMod = document.getElementById('vpBoardModerationList');
+      if (boardMod) {
+        const msgs = [...(data.messages || [])].sort(function(a, b) {
+          return (b.date || '').localeCompare(a.date || '');
+        }).slice(0, 10);
+
+        boardMod.innerHTML = msgs.length
+          ? msgs.map(function(m) {
+              return (
+                '<div class="voter-log-row">' +
+                  '<span><strong>' + esc(m.author) + ':</strong> ' + esc(m.body) + '</span>' +
+                  '<button class="btn btn-sm btn-danger" onclick="vpDeleteBoardMessage(' + m.id + ')">Delete</button>' +
+                '</div>'
+              );
+            }).join('')
+          : '<p class="muted">No messages on the board yet.</p>';
+      }
+    }
 
      // Init
 	 loadData();
