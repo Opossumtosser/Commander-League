@@ -454,6 +454,14 @@
         </div>
         <div id="homeLeaders"></div>
       </div>
+      <!-- COMMANDER COUNCIL -->
+      <div class="card" id="homeCouncilCard">
+        <div class="flex" style="justify-content:space-between;margin-bottom:0.5rem">
+          <h2 style="margin:0">🏛️ Commander Council</h2>
+          <span class="muted" style="font-size:0.82rem">League Leadership &amp; Contacts</span>
+        </div>
+        <div id="homeCouncilGrid" class="deck-grid"></div>
+      </div>
 
       <!-- LATEST NEWS PREVIEW -->
       <div class="card">
@@ -835,6 +843,26 @@
           <button class="btn mt-1" onclick="recalcWeekFromDate()">Recalculate Week from Start Date</button>
         </div>
 		<div class="card">
+		<div class="card">
+          <h2>🏛️ Commander Council Assignments</h2>
+          <p class="muted">Assign league members to the 3 Council roles. Displays on the Home page and adds a role badge to their account when they sign in.</p>
+          <div class="admin-grid mt-1">
+            <div class="form-group">
+              <label>👑 President / CEO &amp; Head Judge</label>
+              <select id="adminCouncilPresident"></select>
+            </div>
+            <div class="form-group">
+              <label>💰 Treasurer</label>
+              <select id="adminCouncilTreasurer"></select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>🛡️ VP of Community &amp; Challenges</label>
+            <select id="adminCouncilCommunity" style="max-width:440px"></select>
+          </div>
+          <button class="btn btn-primary" onclick="saveCommanderCouncil()">Save Council Roles</button>
+        </div>
+
           <h2>📜 Full League Rules Page</h2>
           <p class="muted">Everything entered here displays in full on the dedicated Rules tab.</p>
           <div class="form-group">
@@ -1277,6 +1305,14 @@
       if (!d.playerProfiles || typeof d.playerProfiles !== 'object') {
         d.playerProfiles = {};
       }
+	  if (!d.council || typeof d.council !== 'object') {
+        d.council = {
+          president: '',
+          treasurer: '',
+          community: ''
+        };
+      }
+
       if (!d.seasonStartDate) d.seasonStartDate = DEFAULT_DATA.seasonStartDate;
       if (!d.seasonEndDate) d.seasonEndDate = DEFAULT_DATA.seasonEndDate;
       if (typeof d.autoWeekLock !== 'boolean') d.autoWeekLock = false;
@@ -1532,6 +1568,7 @@
       document.title = title + ' Hub';
 
       renderHome();
+	  renderCommanderCouncil();
       renderStandings();
 	  renderDecks();
       renderNews();
@@ -2241,6 +2278,13 @@
       const rankBadge = document.getElementById('myStatsRankBadge');
       const body = document.getElementById('myStatsBody');
       if (!card || !body) return;
+      if (heading) {
+        const roles = getPlayerCouncilRoles(displayName);
+        heading.innerHTML = '👤 ' + esc(displayName) + '\'s Season Stats' +
+          roles.map(function(r) {
+            return ' <span class="badge" style="background:rgba(201,162,39,0.2);border-color:var(--accent);color:var(--accent);vertical-align:middle">' + esc(r.full) + '</span>';
+          }).join('');
+      }
 
       if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
         card.classList.add('hidden');
@@ -2439,6 +2483,10 @@
       const postNote = isWeekPostponed(data.week) ? ' · Week postponed' : '';
       document.getElementById('standingsMeta').textContent =
         `${data.season} · Week ${data.week}${postNote} · Prize Rule: 3+ weeks attended + Week 6 attendance`;
+      const councilRoles = getPlayerCouncilRoles(p.name);
+      const councilBadge = councilRoles.map(function(r) {
+        return ' <span class="badge" title="' + esc(r.full) + '">' + esc(r.short) + '</span>';
+      }).join('');
 
       const players = sortedPlayers();
       if (!players.length) {
@@ -2469,7 +2517,7 @@
         const promoBadge = p.promoPoint
           ? ' <span class="badge" title="LGS Promo Point (+1 pt)" style="border-color:var(--success);color:#6cd484">+1 🎁</span>'
           : '';
-        let row = `<tr><td class="rank ${rankClass}">${i + 1}</td><td>${esc(p.name)}${chBadge}${promoBadge}<span class="muted" style="font-size:0.78rem">${tbNote}</span></td>`;
+        let row = `<tr><td class="rank ${rankClass}">${i + 1}</td><td>${esc(p.name)}${chBadge}${promoBadge}${councilBadge}<span class="muted" style="font-size:0.78rem">${tbNote}</span></td>`;
 
         if (weekly) {
           for (let w = 0; w < NUM_WEEKS; w++) {
@@ -2997,6 +3045,7 @@
       renderAdminAttendanceAndTables();
       renderAdminVoterLog();
 	  renderAdminProfiles();
+	  renderAdminCouncilSelects();
 
       const postWrap = document.getElementById('adminPostponeWeeks');
       if (postWrap) {
@@ -4082,11 +4131,16 @@
    const btn = document.getElementById('headerAccountBtn');
    if (!btn) return;
    if (currentDeckUser && data.playerProfiles && data.playerProfiles[currentDeckUser]) {
-     btn.textContent = '👤 ' + data.playerProfiles[currentDeckUser].displayName;
+     const dName = data.playerProfiles[currentDeckUser].displayName;
+     const roles = getPlayerCouncilRoles(dName);
+     btn.textContent = roles.length
+       ? '👤 ' + dName + ' (' + roles.at(0).short + ')'
+       : '👤 ' + dName;
    } else {
      btn.textContent = 'Sign In';
    }
  }
+
 
 
 
@@ -4816,7 +4870,131 @@
     resBox.appendChild(wrap);
   }
 
-   
+    // ========== COMMANDER COUNCIL ROLES & BADGES ==========
+ function getPlayerCouncilRoles(playerName) {
+   const norm = (playerName || '').trim().toLowerCase();
+   if (!norm || !data.council) return [];
+   const roles = [];
+   if ((data.council.president || '').trim().toLowerCase() === norm) {
+     roles.push({ key: 'president', short: '👑 President / CEO', full: 'President / CEO & Head Judge' });
+   }
+   if ((data.council.treasurer || '').trim().toLowerCase() === norm) {
+     roles.push({ key: 'treasurer', short: '💰 Treasurer', full: 'Treasurer' });
+   }
+   if ((data.council.community || '').trim().toLowerCase() === norm) {
+     roles.push({ key: 'community', short: '🛡️ VP of Community', full: 'VP of Community & Challenges' });
+   }
+   return roles;
+ }
+
+ function renderCommanderCouncil() {
+   const grid = document.getElementById('homeCouncilGrid');
+   if (!grid) return;
+
+   const c = data.council || {};
+   const seats = [
+     {
+       icon: '👑',
+       title: 'President / CEO & Head Judge',
+       person: c.president || 'Unassigned',
+       desc: 'Sets season themes, makes judge & theme rulings, posts announcements, and runs Wednesday pods.'
+     },
+     {
+       icon: '💰',
+       title: 'Treasurer',
+       person: c.treasurer || 'Unassigned',
+       desc: 'Manages LGS spending, the 50% season prize budget, promo points, and end-of-season prize pool.'
+     },
+     {
+       icon: '🛡️',
+       title: 'VP of Community & Challenges',
+       person: c.community || 'Unassigned',
+       desc: 'Welcomes & onboards new players, designs Season Challenges, and voices player feedback.'
+     }
+   ];
+
+   grid.innerHTML = '';
+   seats.forEach(function(s) {
+     const card = document.createElement('div');
+     card.className = 'deck-card';
+
+     const top = document.createElement('div');
+     const titleEl = document.createElement('div');
+     titleEl.style.cssText = 'font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em';
+     titleEl.textContent = s.icon + ' ' + s.title;
+
+     const nameEl = document.createElement('div');
+     nameEl.style.cssText = 'font-size:1.1rem;font-weight:700;color:var(--accent);margin:0.25rem 0';
+     nameEl.textContent = s.person;
+
+     const descEl = document.createElement('div');
+     descEl.className = 'muted';
+     descEl.style.fontSize = '0.82rem';
+     descEl.textContent = s.desc;
+
+     top.appendChild(titleEl);
+     top.appendChild(nameEl);
+     top.appendChild(descEl);
+     card.appendChild(top);
+     grid.appendChild(card);
+   });
+ }
+
+ function renderAdminCouncilSelects() {
+   const ids = [
+     { id: 'adminCouncilPresident', field: 'president' },
+     { id: 'adminCouncilTreasurer', field: 'treasurer' },
+     { id: 'adminCouncilCommunity', field: 'community' }
+   ];
+
+   const nameSet = new Set();
+   (data.players || []).forEach(function(p) { if (p.name) nameSet.add(p.name.trim()); });
+   Object.values(data.playerProfiles || {}).forEach(function(prof) {
+     if (prof && prof.displayName) nameSet.add(prof.displayName.trim());
+   });
+   if (data.council) {
+     if (data.council.president) nameSet.add(data.council.president.trim());
+     if (data.council.treasurer) nameSet.add(data.council.treasurer.trim());
+     if (data.council.community) nameSet.add(data.council.community.trim());
+   }
+
+   const sortedNames = [...nameSet].filter(Boolean).sort(function(a, b) {
+     return a.localeCompare(b);
+   });
+
+   ids.forEach(function(item) {
+     const sel = document.getElementById(item.id);
+     if (!sel) return;
+     const currentVal = (data.council && data.council[item.field]) ? data.council[item.field].trim() : '';
+
+     sel.innerHTML = '';
+     const noneOpt = document.createElement('option');
+     noneOpt.value = '';
+     noneOpt.textContent = '-- Unassigned --';
+     sel.appendChild(noneOpt);
+
+     sortedNames.forEach(function(name) {
+       const opt = document.createElement('option');
+       opt.value = name;
+       opt.textContent = name;
+       if (name.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
+       sel.appendChild(opt);
+     });
+   });
+ }
+
+ function saveCommanderCouncil() {
+   if (!adminUnlocked) return;
+   if (!data.council) data.council = {};
+   data.council.president = (document.getElementById('adminCouncilPresident').value || '').trim();
+   data.council.treasurer = (document.getElementById('adminCouncilTreasurer').value || '').trim();
+   data.council.community = (document.getElementById('adminCouncilCommunity').value || '').trim();
+   saveData();
+   renderAll();
+   renderAdmin();
+   alert('Commander Council roles saved!');
+ }
+
      // Init
 	 loadData();
 	 renderAll();
