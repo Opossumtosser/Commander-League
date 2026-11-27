@@ -2396,9 +2396,7 @@
         document.getElementById('fullStandings').innerHTML = '<p class="empty">No players yet. Add them in Admin.</p>';
         return;
       }
-      const promoBadge = p.promoPoint
-        ? ' <span class="badge" title="LGS Promo Point (+1 pt)" style="border-color:var(--success);color:#6cd484">+1 🎁</span>'
-        : '';
+      
 
       const weekly = (data.pointsMode || 'weekly') === 'weekly';
       let head = '<th>#</th><th>Player</th>';
@@ -2419,7 +2417,11 @@
         const chBadge = p.challengeWeek
           ? ` <span class="badge" title="Season Challenge completed in Week ${p.challengeWeek}">★ W${p.challengeWeek}</span>`
           : '';
-        let row = `<tr><td class="rank ${rankClass}">${i + 1}</td><td>${esc(p.name)}${chBadge}<span class="muted" style="font-size:0.78rem">${tbNote}</span></td>`;
+        const promoBadge = p.promoPoint
+          ? ' <span class="badge" title="LGS Promo Point (+1 pt)" style="border-color:var(--success);color:#6cd484">+1 🎁</span>'
+          : '';
+        let row = `<tr><td class="rank ${rankClass}">${i + 1}</td><td>${esc(p.name)}${chBadge}${promoBadge}<span class="muted" style="font-size:0.78rem">${tbNote}</span></td>`;
+
         if (weekly) {
           for (let w = 0; w < NUM_WEEKS; w++) {
             const val = p.weeklyPoints[w] || 0;
