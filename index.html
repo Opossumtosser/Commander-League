@@ -2278,6 +2278,17 @@
       const rankBadge = document.getElementById('myStatsRankBadge');
       const body = document.getElementById('myStatsBody');
       if (!card || !body) return;
+
+      if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      const profile = data.playerProfiles[currentDeckUser];
+      const displayName = profile.displayName || '';
+      const normName = displayName.trim().toLowerCase();
+
+      card.classList.remove('hidden');
       if (heading) {
         const roles = getPlayerCouncilRoles(displayName);
         heading.innerHTML = '👤 ' + esc(displayName) + '\'s Season Stats' +
@@ -2285,6 +2296,7 @@
             return ' <span class="badge" style="background:rgba(201,162,39,0.2);border-color:var(--accent);color:var(--accent);vertical-align:middle">' + esc(r.full) + '</span>';
           }).join('');
       }
+
 
       if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
         card.classList.add('hidden');
