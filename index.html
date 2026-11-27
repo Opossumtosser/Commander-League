@@ -2298,18 +2298,6 @@
       }
 
 
-      if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
-        card.classList.add('hidden');
-        return;
-      }
-
-      const profile = data.playerProfiles[currentDeckUser];
-      const displayName = profile.displayName || '';
-      const normName = displayName.trim().toLowerCase();
-
-      card.classList.remove('hidden');
-      if (heading) heading.textContent = '👤 ' + displayName + '\'s Season Stats';
-
       const seasonBudgetStr = formatMoney(data.treasury ? data.treasury.seasonBudget : 0);
       const mySpendObj = (data.treasury && data.treasury.playerSpend) ? data.treasury.playerSpend[normName] : null;
       const mySpentStr = formatMoney(mySpendObj ? mySpendObj.amount : 0);
