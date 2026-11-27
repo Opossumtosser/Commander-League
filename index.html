@@ -414,6 +414,14 @@
           <span class="badge" id="myStatsRankBadge">Rank #—</span>
         </div>
         <div id="myStatsBody"></div>
+		<div style="margin-top:0.85rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+          <div class="flex" style="justify-content:space-between;gap:0.5rem">
+            <label for="homeSelectTonightDeck" style="margin:0;color:var(--text);font-weight:600">🃏 Deck I'm Piloting Tonight (Own or Borrowed):</label>
+            <select id="homeSelectTonightDeck" onchange="selectTonightPilotedDeck(this.value)" style="max-width:340px;padding:0.4rem 0.6rem"></select>
+          </div>
+          <div id="homeMyDeckOddsBox" class="mt-1"></div>
+        </div>
+
       </div>
 
       <!-- PLAYER CHECK-IN -->
@@ -654,6 +662,24 @@
           <h3 class="mt-2">My Saved Decks</h3>
           <div id="mySavedDecksGrid" class="deck-grid mt-1"></div>
         </div>
+      </div>
+      <!-- DECK MATCHUP & WIN PROBABILITY EXPLORER -->
+      <div class="card">
+        <h2>📊 Deck Win Rates &amp; Matchup Probability Estimator</h2>
+        <div style="background:rgba(201,162,39,0.12);border:1px solid rgba(201,162,39,0.35);border-radius:8px;padding:0.6rem 0.8rem;font-size:0.82rem;color:var(--text-muted);margin-bottom:0.85rem">
+          <strong>⚠️ Disclaimer:</strong> Win probabilities are rough statistical guesses based on recorded league games and deck power metrics. Nothing here is 100% factual, and these numbers should never be taken as an exact measure of a player's talent, skill, or experience.
+        </div>
+        <div class="admin-grid">
+          <div class="form-group">
+            <label>Select Deck to Inspect</label>
+            <select id="matchupDeckASelect" onchange="renderDeckMatchupExplorer()"></select>
+          </div>
+          <div class="form-group">
+            <label>Compare Against Opponent's Deck (Optional)</label>
+            <select id="matchupDeckBSelect" onchange="renderDeckMatchupExplorer()"></select>
+          </div>
+        </div>
+        <div id="deckMatchupResultBox" class="mt-1"></div>
       </div>
 
       <!-- PUBLIC LEAGUE DECK SHOWCASE -->
@@ -1261,6 +1287,13 @@
       if (!Array.isArray(d.vote.voters)) d.vote.voters = [];
       if (!Array.isArray(d.vote.voterLog)) d.vote.voterLog = [];
       if (!Array.isArray(d.messages)) d.messages = [];
+	  if (!d.tonightDecks || typeof d.tonightDecks !== 'object') {
+        d.tonightDecks = {};
+      }
+      if (!Array.isArray(d.deckMatches)) {
+        d.deckMatches = [];
+      }
+
 	  if (!d.treasury || typeof d.treasury !== 'object') {
 	     d.treasury = {
 	       password: 'treasury',
@@ -1951,6 +1984,11 @@
 
     function renderPodsHtml(pods, isAdminPreview = false) {
       const maxTableOptions = Math.max(pods.length, 6);
+      const adminLogBtn = isAdminPreview
+        ? '<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border);text-align:right">' +
+            '<button class="btn btn-sm btn-primary" onclick="recordPodGameResult(' + podIdx + ')">🏆 Log Pod Game &amp; Deck Stats</button>' +
+          '</div>'
+        : '';
 
       // Detect signed-in player's name (if not in admin preview)
       let myNormName = '';
@@ -2003,6 +2041,14 @@
             '</li>'
           );
         }).join('');
+	     // Inside seatsHtml map, right after esc(player):
+	    const pKey = (player || '').trim().toLowerCase();
+	    const chosenDeck = data.tonightDecks && data.tonightDecks[pKey];
+	    const deckTag = chosenDeck
+	      ? ' <span class="badge" style="font-size:0.7rem;margin-left:0.35rem" title="' + esc(chosenDeck.commander) + '">' +
+	          esc(chosenDeck.deckTitle) + (chosenDeck.borrowedFrom ? ' (from ' + esc(chosenDeck.borrowedFrom) + ')' : '') +
+	        '</span>'
+	      : '';
 
         const rightBadge = isMyPod
           ? '<span class="badge" style="background:var(--accent);color:#111">★ Your Table</span>'
@@ -4320,6 +4366,451 @@
       }
     }
 
+    // ========== TONIGHT'S DECK SELECTION, BORROWING & MATCHUP ODDS ==========
+  function getAllLeagueDecksCatalog() {
+      const catalog = [];
+      Object.entries(data.playerProfiles || {}).forEach(function(entry) {
+        const ownerKey = entry.at(0);
+        const prof = entry.at(1);
+        (prof.decks || []).forEach(function(deck) {
+          catalog.push({
+            uid: ownerKey + '::' + deck.id,
+            ownerKey: ownerKey,
+            ownerName: prof.displayName || ownerKey,
+            deckId: deck.id,
+            title: deck.title,
+            commander: deck.commander,
+            stats: deck.stats || { power10: 5, bracket: 2, bracketLabel: 'Bracket 2 · Core' }
+          });
+        });
+      });
+      return catalog;
+    }
+
+    function getPlayerTonightDeck(playerName) {
+      const key = (playerName || '').trim().toLowerCase();
+      if (!key || !data.tonightDecks) return null;
+      return data.tonightDecks[key] || null;
+    }
+
+    function selectTonightPilotedDeck(uid) {
+      if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) return;
+      if (!data.tonightDecks) data.tonightDecks = {};
+
+      if (!uid) {
+        delete data.tonightDecks[currentDeckUser];
+        saveData();
+        renderAll();
+        return;
+      }
+
+      const catalog = getAllLeagueDecksCatalog();
+      const found = catalog.find(function(item) { return item.uid === uid; });
+      if (!found) return;
+
+      const isBorrowed = found.ownerKey !== currentDeckUser;
+      data.tonightDecks[currentDeckUser] = {
+        uid: found.uid,
+        deckId: found.deckId,
+        ownerKey: found.ownerKey,
+        ownerName: found.ownerName,
+        deckTitle: found.title,
+        commander: found.commander,
+        borrowedFrom: isBorrowed ? found.ownerName : null,
+        week: data.week
+      };
+
+      // Also mark as active in own vault if it's their own deck
+      if (!isBorrowed) {
+        const prof = data.playerProfiles[currentDeckUser];
+        (prof.decks || []).forEach(function(d) { d.active = (d.id === found.deckId); });
+      }
+
+      saveData();
+      renderAll();
+      if (adminUnlocked) renderAdmin();
+    }
+
+    function recordPodGameResult(podIdx) {
+      if (!adminUnlocked) return;
+      const gt = data.generatedTables;
+      if (!gt || !Array.isArray(gt.pods) || !gt.pods[podIdx]) return;
+      const pod = gt.pods[podIdx];
+
+      let promptLines = 'Enter the seat number (1–' + pod.players.length + ') of the pod winner for Table ' + pod.tableNumber + ':\n\n';
+      pod.players.forEach(function(pl, idx) {
+        const dInfo = getPlayerTonightDeck(pl);
+        const dLabel = dInfo ? ' [' + dInfo.deckTitle + (dInfo.borrowedFrom ? ' — borrowed from ' + dInfo.borrowedFrom : '') + ']' : ' [No deck selected]';
+        promptLines += (idx + 1) + '. ' + pl + dLabel + '\n';
+      });
+
+      const choice = prompt(promptLines);
+      if (choice === null) return;
+      const seatNum = parseInt(choice.trim());
+      if (isNaN(seatNum) || seatNum < 1 || seatNum > pod.players.length) {
+        return alert('Invalid seat number.');
+      }
+
+      const winnerName = pod.players.at(seatNum - 1);
+      const participants = pod.players.map(function(pl) {
+        const pKey = pl.trim().toLowerCase();
+        const dInfo = getPlayerTonightDeck(pl);
+        return {
+          playerKey: pKey,
+          playerName: pl,
+          deckUid: dInfo ? dInfo.uid : null,
+          deckTitle: dInfo ? dInfo.deckTitle : 'Unregistered Deck',
+          commander: dInfo ? dInfo.commander : '',
+          borrowedFrom: dInfo ? dInfo.borrowedFrom : null,
+          won: pl === winnerName
+        };
+      });
+
+      if (!Array.isArray(data.deckMatches)) data.deckMatches = [];
+      data.deckMatches.unshift({
+        id: Date.now(),
+        week: data.week,
+        tableNumber: pod.tableNumber,
+        winnerName: winnerName,
+        winnerKey: winnerName.trim().toLowerCase(),
+        participants: participants,
+        date: new Date().toISOString()
+      });
+
+      // Keep match log compact for Firestore (< 200 matches)
+      if (data.deckMatches.length > 200) {
+        data.deckMatches = data.deckMatches.slice(0, 200);
+      }
+
+      saveData();
+      renderAll();
+      alert('Recorded Table ' + pod.tableNumber + ' win for ' + winnerName + '! Deck and pilot matchup stats updated.');
+    }
+
+    function computeDeckAndPilotStats(deckUid, opponentDeckUid) {
+      const matches = Array.isArray(data.deckMatches) ? data.deckMatches : [];
+      const catalog = getAllLeagueDecksCatalog();
+      const deckA = catalog.find(function(c) { return c.uid === deckUid; });
+      const deckB = opponentDeckUid ? catalog.find(function(c) { return c.uid === opponentDeckUid; }) : null;
+
+      let gamesPlayed = 0;
+      let wins = 0;
+      let h2hGames = 0;
+      let h2hWins = 0;
+      const vsBreakdown = {};
+
+      matches.forEach(function(m) {
+        const parts = Array.isArray(m.participants) ? m.participants : [];
+        const me = parts.find(function(pt) { return pt.deckUid === deckUid; });
+        if (!me) return;
+
+        gamesPlayed++;
+        if (me.won) wins++;
+
+        parts.forEach(function(opp) {
+          if (opp.playerKey === me.playerKey || !opp.deckUid) return;
+          if (!vsBreakdown[opp.deckUid]) {
+            vsBreakdown[opp.deckUid] = {
+              deckUid: opp.deckUid,
+              deckTitle: opp.deckTitle,
+              commander: opp.commander,
+              games: 0,
+              wins: 0
+            };
+          }
+          vsBreakdown[opp.deckUid].games++;
+          if (me.won) vsBreakdown[opp.deckUid].wins++;
+
+          if (opponentDeckUid && opp.deckUid === opponentDeckUid) {
+            h2hGames++;
+            if (me.won) h2hWins++;
+          }
+        });
+      });
+
+      // General win probability estimate (smoothed toward 25% 4-player Commander baseline + slight power curve)
+      const powerA = deckA && deckA.stats ? (deckA.stats.power10 || 5) : 5;
+      const powerBaseline = Math.max(0.12, Math.min(0.45, 0.25 + (powerA - 5) * 0.025));
+      const generalProb = Math.round(((wins + 4 * powerBaseline) / (gamesPlayed + 4)) * 100);
+
+      // Head-to-head probability estimate
+      let h2hProb = null;
+      if (deckA && deckB) {
+        const powerB = deckB.stats ? (deckB.stats.power10 || 5) : 5;
+        const h2hPrior = Math.max(0.10, Math.min(0.50, 0.25 + (powerA - powerB) * 0.03));
+        h2hProb = Math.round(((h2hWins + 3 * h2hPrior) / (h2hGames + 3)) * 100);
+      }
+
+      return {
+        deckA: deckA,
+        deckB: deckB,
+        gamesPlayed: gamesPlayed,
+        wins: wins,
+        rawWinPct: gamesPlayed ? Math.round((wins / gamesPlayed) * 100) : 0,
+        generalProb: generalProb,
+        h2hGames: h2hGames,
+        h2hWins: h2hWins,
+        h2hProb: h2hProb,
+        vsList: Object.values(vsBreakdown)
+      };
+    }
+
+    function computePilotPersonalDeckStats(pilotKey) {
+      const matches = Array.isArray(data.deckMatches) ? data.deckMatches : [];
+      let games = 0;
+      let wins = 0;
+      let borrowedWins = 0;
+      matches.forEach(function(m) {
+        const me = (m.participants || []).find(function(pt) { return pt.playerKey === pilotKey; });
+        if (!me) return;
+        games++;
+        if (me.won) {
+          wins++;
+          if (me.borrowedFrom) borrowedWins++;
+        }
+      });
+      return { games: games, wins: wins, borrowedWins: borrowedWins };
+    }
+
+    function renderHomeTonightDeckSelector() {
+      const sel = document.getElementById('homeSelectTonightDeck');
+      const oddsBox = document.getElementById('homeMyDeckOddsBox');
+      if (!sel) return;
+
+      if (!currentDeckUser || !data.playerProfiles || !data.playerProfiles[currentDeckUser]) {
+        sel.innerHTML = '';
+        if (oddsBox) oddsBox.innerHTML = '';
+        return;
+      }
+
+      const catalog = getAllLeagueDecksCatalog();
+      const myDecks = catalog.filter(function(c) { return c.ownerKey === currentDeckUser; });
+      const otherDecks = catalog.filter(function(c) { return c.ownerKey !== currentDeckUser; });
+      const currentChosen = getPlayerTonightDeck(currentDeckUser);
+      const chosenUid = currentChosen ? currentChosen.uid : '';
+
+      sel.innerHTML = '';
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = '-- Choose a deck for tonight --';
+      sel.appendChild(defaultOpt);
+
+      if (myDecks.length) {
+        const grpMine = document.createElement('optgroup');
+        grpMine.label = 'My Saved Decks';
+        myDecks.forEach(function(d) {
+          const opt = document.createElement('option');
+          opt.value = d.uid;
+          opt.textContent = d.title + ' (' + d.commander + ')';
+          if (d.uid === chosenUid) opt.selected = true;
+          grpMine.appendChild(opt);
+        });
+        sel.appendChild(grpMine);
+      }
+
+      if (otherDecks.length) {
+        const grpBorrow = document.createElement('optgroup');
+        grpBorrow.label = 'Borrow Another Player Deck';
+        otherDecks.forEach(function(d) {
+          const opt = document.createElement('option');
+          opt.value = d.uid;
+          opt.textContent = 'Borrow: ' + d.ownerName + ' - ' + d.title + ' (' + d.commander + ')';
+          if (d.uid === chosenUid) opt.selected = true;
+          grpBorrow.appendChild(opt);
+        });
+        sel.appendChild(grpBorrow);
+      }
+
+      if (!oddsBox) return;
+      oddsBox.innerHTML = '';
+      const pilotStats = computePilotPersonalDeckStats(currentDeckUser);
+
+      if (!chosenUid) {
+        const p = document.createElement('p');
+        p.className = 'muted';
+        p.style.fontSize = '0.82rem';
+        p.textContent = 'Select your deck (or borrow a friend deck) so pod results track your deck stats. Your logged deck games: ' + pilotStats.wins + 'W - ' + (pilotStats.games - pilotStats.wins) + 'L.';
+        oddsBox.appendChild(p);
+        return;
+      }
+
+      const st = computeDeckAndPilotStats(chosenUid, null);
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-size:0.84rem';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'flex';
+      topRow.style.justifyContent = 'space-between';
+
+      const leftSpan = document.createElement('span');
+      leftSpan.textContent = 'Piloting: ' + currentChosen.deckTitle + ' ';
+      if (currentChosen.borrowedFrom) {
+        const bBadge = document.createElement('span');
+        bBadge.className = 'badge';
+        bBadge.textContent = 'Borrowed from ' + currentChosen.borrowedFrom + ' (wins count to your stats)';
+        leftSpan.appendChild(bBadge);
+      }
+
+      const rightSpan = document.createElement('span');
+      rightSpan.style.cssText = 'color:var(--accent);font-weight:700';
+      rightSpan.textContent = 'Est. Win Probability: ~' + st.generalProb + '%';
+
+      topRow.appendChild(leftSpan);
+      topRow.appendChild(rightSpan);
+      card.appendChild(topRow);
+
+      const midRow = document.createElement('div');
+      midRow.className = 'muted';
+      midRow.style.cssText = 'font-size:0.78rem;margin-top:0.25rem';
+      let recText = 'Deck Record: ' + st.wins + 'W - ' + (st.gamesPlayed - st.wins) + 'L (' + st.gamesPlayed + ' games) | Your Personal Pod Record: ' + pilotStats.wins + 'W - ' + (pilotStats.games - pilotStats.wins) + 'L';
+      if (pilotStats.borrowedWins) {
+        recText += ' (' + pilotStats.borrowedWins + ' with borrowed decks)';
+      }
+      midRow.textContent = recText;
+      card.appendChild(midRow);
+
+      const discRow = document.createElement('div');
+      discRow.className = 'muted';
+      discRow.style.cssText = 'font-size:0.72rem;margin-top:0.25rem;font-style:italic';
+      discRow.textContent = '*Probability is a rough estimate only, not 100% factual, and does not measure player talent or experience.';
+      card.appendChild(discRow);
+
+      oddsBox.appendChild(card);
+    }
+
+    function renderDeckMatchupExplorer() {
+      const selA = document.getElementById('matchupDeckASelect');
+      const selB = document.getElementById('matchupDeckBSelect');
+      const resBox = document.getElementById('deckMatchupResultBox');
+      if (!selA || !selB || !resBox) return;
+
+      const catalog = getAllLeagueDecksCatalog();
+      if (!catalog.length) {
+        selA.innerHTML = '';
+        const optA = document.createElement('option');
+        optA.value = '';
+        optA.textContent = 'No registered decks yet';
+        selA.appendChild(optA);
+
+        selB.innerHTML = '';
+        const optB = document.createElement('option');
+        optB.value = '';
+        optB.textContent = 'No registered decks yet';
+        selB.appendChild(optB);
+
+        resBox.innerHTML = '';
+        const emptyP = document.createElement('p');
+        emptyP.className = 'muted';
+        emptyP.textContent = 'Register decks in your vault above to see win rates and matchup estimates.';
+        resBox.appendChild(emptyP);
+        return;
+      }
+
+      const prevA = selA.value || (catalog.at(0) ? catalog.at(0).uid : '');
+      const prevB = selB.value || '';
+
+      selA.innerHTML = '';
+      catalog.forEach(function(c) {
+        const opt = document.createElement('option');
+        opt.value = c.uid;
+        opt.textContent = c.ownerName + ' — ' + c.title + ' (' + c.commander + ')';
+        if (c.uid === prevA) opt.selected = true;
+        selA.appendChild(opt);
+      });
+
+      selB.innerHTML = '';
+      const allOpt = document.createElement('option');
+      allOpt.value = '';
+      allOpt.textContent = '-- All Opponents (General Stats) --';
+      selB.appendChild(allOpt);
+
+      catalog.filter(function(c) { return c.uid !== selA.value; }).forEach(function(c) {
+        const opt = document.createElement('option');
+        opt.value = c.uid;
+        opt.textContent = c.ownerName + ' — ' + c.title + ' (' + c.commander + ')';
+        if (c.uid === prevB) opt.selected = true;
+        selB.appendChild(opt);
+      });
+
+      const st = computeDeckAndPilotStats(selA.value, selB.value || null);
+      resBox.innerHTML = '';
+      if (!st.deckA) return;
+
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.85rem';
+
+      const head = document.createElement('div');
+      head.className = 'flex';
+      head.style.cssText = 'justify-content:space-between;margin-bottom:0.4rem';
+
+      const titleDiv = document.createElement('div');
+      const titleStrong = document.createElement('strong');
+      titleStrong.textContent = st.deckA.title + ' ';
+      const cmdSpan = document.createElement('span');
+      cmdSpan.className = 'muted';
+      cmdSpan.textContent = '(' + st.deckA.commander + ')';
+      titleDiv.appendChild(titleStrong);
+      titleDiv.appendChild(cmdSpan);
+
+      const badgeSpan = document.createElement('span');
+      badgeSpan.className = 'badge';
+      badgeSpan.textContent = (st.deckA.stats.bracketLabel || '') + ' · Power ' + (st.deckA.stats.power10 || 5) + '/10';
+
+      head.appendChild(titleDiv);
+      head.appendChild(badgeSpan);
+      wrap.appendChild(head);
+
+      const statsRow = document.createElement('div');
+      statsRow.className = 'flex';
+      statsRow.style.cssText = 'gap:1.25rem;margin-bottom:0.5rem';
+
+      const recDiv = document.createElement('div');
+      recDiv.textContent = 'Overall Record: ' + st.wins + 'W - ' + (st.gamesPlayed - st.wins) + 'L (' + st.gamesPlayed + ' games)';
+
+      const probDiv = document.createElement('div');
+      probDiv.style.cssText = 'color:var(--accent);font-weight:700';
+      probDiv.textContent = 'Est. General Win Probability: ~' + st.generalProb + '%';
+
+      statsRow.appendChild(recDiv);
+      statsRow.appendChild(probDiv);
+      wrap.appendChild(statsRow);
+
+      if (st.deckB) {
+        const h2hBox = document.createElement('div');
+        h2hBox.style.cssText = 'margin-top:0.65rem;padding-top:0.65rem;border-top:1px solid var(--border)';
+
+        const h2hTitle = document.createElement('div');
+        h2hTitle.style.cssText = 'font-weight:700;margin-bottom:0.25rem';
+        h2hTitle.textContent = 'Head-to-Head vs. ' + st.deckB.ownerName + ' - ' + st.deckB.title + ' (' + st.deckB.commander + ')';
+        h2hBox.appendChild(h2hTitle);
+
+        const h2hRow = document.createElement('div');
+        h2hRow.className = 'flex';
+        h2hRow.style.gap = '1.25rem';
+
+        const h2hRec = document.createElement('div');
+        h2hRec.textContent = 'Matchup Record: ' + st.h2hWins + 'W - ' + (st.h2hGames - st.h2hWins) + 'L (' + st.h2hGames + ' pods faced)';
+
+        const h2hProb = document.createElement('div');
+        h2hProb.style.cssText = 'color:var(--accent);font-weight:700';
+        h2hProb.textContent = 'Est. Win Probability vs. This Deck: ~' + st.h2hProb + '%';
+
+        h2hRow.appendChild(h2hRec);
+        h2hRow.appendChild(h2hProb);
+        h2hBox.appendChild(h2hRow);
+        wrap.appendChild(h2hBox);
+      } else if (st.vsList.length) {
+        const vsBox = document.createElement('div');
+        vsBox.style.cssText = 'margin-top:0.65rem;padding-top:0.65rem;border-top:1px solid var(--border)';
+
+        const vsLabel = document.createElement('div');
+        vsLabel.className = 'muted';
+        vsBox.appendChild(row);
+      });
+      wrap.appendChild(vsBox);
+    }
+    resBox.appendChild(wrap);
+  }
 
    
      // Init
