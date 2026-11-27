@@ -2282,6 +2282,7 @@
             '<span class="badge">Season Prize Budget: ' + seasonBudgetStr + '</span>' +
             '<span class="badge">My LGS Spend: ' + mySpentStr + '</span>' +
           '</div>';
+		renderHomeTonightDeckSelector();  
         return;
       }
 
@@ -2328,6 +2329,8 @@
           '<div><span class="muted">Promo Point:</span> ' + promoHtml + '</div>' +
         '</div>' +
         '<div class="flex" style="gap:0.4rem">' + weekChips + '</div>';
+
+		renderHomeTonightDeckSelector();
     }
 
 
@@ -3758,6 +3761,7 @@
       if (!count) {
         publicGrid.innerHTML = '<p class="empty" style="grid-column:1/-1">No decks registered yet. Sign in above to add yours!</p>';
       }
+	  renderDeckMatchupExplorer();
     }
     function openWelcomeGate() {
       const ov = document.getElementById('welcomeOverlay');
